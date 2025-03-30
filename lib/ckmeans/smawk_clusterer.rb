@@ -26,6 +26,7 @@ module Ckmeans
           @smat = Array.new(kmax) { Array.new(xcount) { 0.0 } }
           @jmat = Array.new(kmax) { Array.new(xcount) { 0 } }
 
+          puts "will fill matrix"
           # fill matrix start
           kappa = kmax
           n = xcount
@@ -43,12 +44,15 @@ module Ckmeans
             smat[0][i] = dissim(0, i, xsum, xsumsq)
             jmat[0][i] = 0
           end
+          puts "finished initializing xsum, xsumsq, smat, jmat"
 
           kappa_dec = kappa - 1
           1.upto(kappa_dec) do |q|
             imin = q < kappa_dec ? [1, q].max : n - 1
+            puts "will fill row #{q} of #{kappa_dec}"
             fill_row_q_linear(imin, n - 1, q, smat, jmat, xsum, xsumsq)
           end
+
           # fill matrix end
           kopt = select_levels(jmat)
 
@@ -66,7 +70,7 @@ module Ckmeans
       return [kmin, kmax].min if kmin > kmax || xcount < 2
 
       kopt = kmin
-      bicmax = 0.0
+      bicmax = -Float::INFINITY
 
       lambda_ = Array.new(kmax)
       mu = Array.new(kmax)
@@ -108,14 +112,24 @@ module Ckmeans
 
         loglikelihood = 0
 
+        # xcount.times do |i|
+        #   likelihood = 0.0
+
+        #   kappa.times do |k|
+        #     likelihood += coeff[k] * Math.exp( - (xsorted[i] - mu[k]) ** 2 / (2.0 * sigma2[k]))
+        #   end
+
+        #   loglikelihood += Math.log(likelihood)
+        # end
+
         xcount.times do |i|
           likelihood = 0.0
-
           kappa.times do |k|
-            likelihood += coeff[k] * Math.exp( - (xsorted[i] - mu[k]) ** 2 / (2.0 * sigma2[k]))
+            likelihood += coeff[k] * Math.exp( - (xsorted[i] - mu[k]) * (xsorted[i] - mu[k]) / (2.0 * sigma2[k]))
           end
 
-          loglikelihood += Math.log(likelihood)
+          # Avoid Math.log(0)
+          loglikelihood += Math.log([likelihood, 1e-300].max)
         end
 
         bic = 2 * loglikelihood - (3 * kappa - 1) * Math.log(xcount.to_f)
@@ -135,7 +149,7 @@ module Ckmeans
       sum, sumsq, mean, variance = 0.0, 0.0, 0.0, 0.0
       n = iright - ileft + 1
 
-      if iright > ileft
+      if iright >= ileft
         median = xsorted[(ileft + iright) / 2]
 
         ileft.upto(iright) do |i|
@@ -180,12 +194,16 @@ module Ckmeans
       [0, sji].max
     end
 
+
     def fill_row_q_linear(imin, imax, q, smat, jmat, xsum, xsumsq)
-      js = (q...(imax+1)).to_a
+      size = imax - q + 1
+
+      js = Array.new(size) { |i| q + i }
       smawk(imin, imax, 1, q, js, smat, jmat, xsum, xsumsq)
     end
 
     def smawk(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+      puts "smawk called with imin: #{imin}, #{istep}, q: #{q}, js: #{js}"
       if (imax - imin) <= (0 * istep)
         find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
       else
@@ -199,6 +217,7 @@ module Ckmeans
     end
 
     def find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+      puts "find_min_from_candidates called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
       rmin_prev = 0
 
       (imin..imax).step(istep) do |i|
@@ -225,6 +244,7 @@ module Ckmeans
 
     # TODO: Rename to `js_reduced`
     def reduce_in_place(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+      puts "reduce in place called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
       n = (imax - imin) / istep + 1
       js_red = js.dup
 
@@ -239,10 +259,6 @@ module Ckmeans
         j = js_red[right]
         sl = smat[q - 1][j - 1] + dissim(j, i, xsum, xsumsq)
         jplus1 = js_red[right + 1]
-        if jplus1 == nil
-          require 'pry'
-          binding.pry
-        end
         splus1 = smat[q - 1][jplus1 - 1] + dissim(jplus1, i, xsum, xsumsq)
 
         if (sl < splus1) && (p < n - 1)
@@ -275,6 +291,7 @@ module Ckmeans
     end
 
     def fill_even_positions(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+      puts "fill_even_positions called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
       n = js.size
       istepx2 = istep * 2
       jl = js[0]
@@ -284,15 +301,11 @@ module Ckmeans
       while i <= imax
         while js[r] < jl
           r += 1
-          if r >= n
-            require 'pry'
-            binding.pry
-          end
         end
 
         smat[q][i] = smat[q - 1][js[r] - 1] + dissim(js[r], i, xsum, xsumsq)
         jmat[q][i] = js[r]
-        jh         = ((i + istep <= imax) ? jmat[q][i + istep] : js[n - 1]).to_i
+        jh         = (((i + istep) <= imax) ? jmat[q][i + istep] : js[n - 1]).to_i
         jmax       = [jh, i].min.to_i
         sjimin     = dissim(jmax, i, xsum, xsumsq)
 
@@ -301,7 +314,10 @@ module Ckmeans
           jabs = js[r]
 
           break if jabs > i
-          next if jabs < jmat[q - 1][i]
+          if jabs < jmat[q - 1][i]
+            r += 1
+            next
+          end
 
           s  = dissim(jabs, i, xsum, xsumsq)
           sj = smat[q - 1][jabs - 1] + s

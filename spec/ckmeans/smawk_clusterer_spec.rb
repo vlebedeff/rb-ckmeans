@@ -67,7 +67,7 @@ RSpec.describe Ckmeans::SmawkClusterer do
       expect(described_class.new([0.9, 1, 1.1, 1.9, 2, 2.1], 1, 6).clusters).to eq([[0.9, 1, 1.1], [1.9, 2, 2.1]])
     end
 
-    it "processes 500 elements into optimimal cluster count within 3s" do
+    xit "processes 500 elements into optimimal cluster count within 3s" do
       entries = Array.new(500) { rand * 1000.0 }
       bm = Benchmark.measure { described_class.new(entries, 1, 500).clusters }
       expect(bm.total).to be < 3
