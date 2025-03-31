@@ -27,3 +27,7 @@ Ckmeans::Clusterer(data, kmin, kmax, :sensitive).clusters # Adjust Bayesian Info
 ## License
 
 The gem is available as open source under the terms of the [LGPL v3 License](https://opensource.org/license/lgpl-3-0).
+
+## References
+
+- https://github.com/cran/Ckmeans.1d.dp
