@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Ckmeans::SmawkClusterer do
+RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
   describe "#new" do
     specify do
       expect { described_class.new([], 0, 0) }.to_not raise_error
@@ -54,6 +54,13 @@ RSpec.describe Ckmeans::SmawkClusterer do
 
       it "penalizes extra clusters with high sensitivity" do
         expect(described_class.new(x, 1, 4, :sensitive).clusters).to eq([[100, 100, 100, 99_999]])
+      end
+
+      it "splits sequences with more data points" do
+        expect(described_class.new(x + [100_000], 1, 4).clusters).to eq([[100, 100, 100], [99_999, 100_000]])
+        expect(described_class.new(x + [100_000], 1, 4, :sensitive).clusters).to(
+          eq([[100, 100, 100], [99_999, 100_000]])
+        )
       end
     end
 

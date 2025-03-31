@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Ckmeans
-  class SmawkClusterer # rubocop:disable Style/Documentation, Metrics/ClassLength
+  class Clusterer # rubocop:disable Style/Documentation, Metrics/ClassLength
     attr_reader :xcount, :xsorted, :kmin, :kmax, :smat, :jmat, :kestimate
 
     PI_DOUBLE = Math::PI * 2
