@@ -9,9 +9,9 @@ Gem::Specification.new do |spec|
   spec.email = ["vladlebedeff@gmail.com"]
 
   spec.summary = "Ruby implementation of Ckmeans.1d.dp"
-  spec.description = "TODO: Write a longer description or delete this line."
+  spec.description = "Repeatable clustering of unidimensional data"
   spec.homepage = "https://github.com/vlebedeff/rb-ckmeans"
-  spec.license = "MIT"
+  spec.license = "LGPLv3"
   spec.required_ruby_version = ">= 3.1.0"
 
   spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
