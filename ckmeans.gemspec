@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
   spec.license = "LGPL-3.0-only"
   spec.required_ruby_version = ">= 3.1.0"
 
-  spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
+  # spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.metadata["homepage_uri"] = spec.homepage
