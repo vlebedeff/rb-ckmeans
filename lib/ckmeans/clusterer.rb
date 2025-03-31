@@ -44,13 +44,13 @@ module Ckmeans
           kappa_dec = kappa - 1
           1.upto(kappa_dec) do |q|
             imin = q < kappa_dec ? [1, q].max : n - 1
-            fill_row(q, imin, n - 1, smat, jmat, xsum, xsumsq)
+            fill_row(q, imin, n - 1, xsum, xsumsq)
           end
 
-          kopt = koptimal(jmat)
+          kopt = koptimal
 
           results = []
-          backtrack(jmat, kopt) do |q, left, right|
+          backtrack(kopt) do |q, left, right|
             results[q] = xsorted[left..right]
           end
           results
@@ -59,7 +59,7 @@ module Ckmeans
 
     private
 
-    def koptimal(jmat)
+    def koptimal
       kopt = kmin
       n = xcount
       max_bic = 0.0
@@ -69,7 +69,7 @@ module Ckmeans
 
       kmin.upto(kmax) do |k|
         sizes = Array.new(k)
-        backtrack(jmat, k) { |q, left, right| sizes[q] = right - left + 1 }
+        backtrack(k) { |q, left, right| sizes[q] = right - left + 1 }
         index_left = 0
         index_right = nil
         loglikelihood = 0.0
@@ -145,7 +145,7 @@ module Ckmeans
       [mean, variance]
     end
 
-    def backtrack(jmat, k)
+    def backtrack(k)
       n = jmat[0].size
       right = n - 1
       left = nil
@@ -174,27 +174,27 @@ module Ckmeans
       [0, sji].max
     end
 
-    def fill_row(q, imin, imax, smat, jmat, xsum, xsumsq)
+    def fill_row(q, imin, imax, xsum, xsumsq)
       size = imax - q + 1
 
       js = Array.new(size) { |i| q + i }
-      smawk(imin, imax, 1, q, js, smat, jmat, xsum, xsumsq)
+      smawk(imin, imax, 1, q, js, xsum, xsumsq)
     end
 
-    def smawk(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+    def smawk(imin, imax, istep, q, js, xsum, xsumsq)
       if (imax - imin) <= (0 * istep)
-        find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+        find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
       else
-        js_odd = js_reduced(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+        js_odd = js_reduced(imin, imax, istep, q, js, xsum, xsumsq)
         istepx2 = istep * 2
         imin_odd = imin + istep
         imax_odd = imin_odd + ((imax - imin_odd) / istepx2 * istepx2)
-        smawk(imin_odd, imax_odd, istepx2, q, js_odd, smat, jmat, xsum, xsumsq)
+        smawk(imin_odd, imax_odd, istepx2, q, js_odd, xsum, xsumsq)
         fill_even_positions(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
       end
     end
 
-    def find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+    def find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
       rmin_prev = 0
 
       (imin..imax).step(istep) do |i|
@@ -219,7 +219,7 @@ module Ckmeans
       end
     end
 
-    def js_reduced(imin, imax, istep, q, js, smat, _jmat, xsum, xsumsq)
+    def js_reduced(imin, imax, istep, q, js, xsum, xsumsq)
       n = ((imax - imin) / istep) + 1
       m = js.size
 
