@@ -129,11 +129,17 @@ RSpec.describe Ckmeans::SmawkClusterer do
       )
     end
 
-    it "processes 1000 elements into optimimal cluster count within 3s" do
+    it "processes 1000 elements into optimimal cluster count within 2s" do
       entries = Array.new(1000) { rand * 10_000.0 }
       clusters = nil
+      # profiler = RubyProf::Profile.new
+      # profiler.start
       bm = Benchmark.measure { clusters = described_class.new(entries, 1, 1000, :sensitive).clusters }
-      expect(bm.total).to be < 3
+      # puts bm.total
+      # profiling = profiler.stop
+      # printer = RubyProf::FlatPrinter.new(profiling)
+      # printer.print(STDOUT)
+      expect(bm.total).to be < 2
     end
   end
 end

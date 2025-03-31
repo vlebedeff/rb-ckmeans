@@ -44,10 +44,10 @@ module Ckmeans
           kappa_dec = kappa - 1
           1.upto(kappa_dec) do |q|
             imin = q < kappa_dec ? [1, q].max : n - 1
-            fill_row_q_linear(imin, n - 1, q, smat, jmat, xsum, xsumsq)
+            fill_row(q, imin, n - 1, smat, jmat, xsum, xsumsq)
           end
 
-          kopt = select_levels_3_4_12(jmat)
+          kopt = koptimal(jmat)
 
           results = []
           backtrack(jmat, kopt) do |q, left, right|
@@ -59,27 +59,13 @@ module Ckmeans
 
     private
 
-    def range_of_variance(x)
-      dposmin = x[-1] - x[0]
-      dposmax = 0.0
-
-      (1...x.size).each do |n|
-        d = x[n] - x[n - 1]
-        dposmin = d if d > 0 && dposmin > d
-        dposmax = d if d > dposmax
-      end
-
-      variance_min = dposmin * dposmin / 3.0
-      variance_max = dposmax * dposmax
-
-      [variance_min, variance_max]
-    end
-
-    def select_levels_3_4_12(jmat)
+    def koptimal(jmat)
       kopt = kmin
       n = xcount
       max_bic = 0.0
-      adjustment = kestimate == :sensitive ? 0.0 : 1.0 # deviation from BIC to favor more clusters
+
+      # Deviation from BIC formula to favor smaller clusters
+      adjustment = kestimate == :sensitive ? 0.0 : 1.0
 
       kmin.upto(kmax) do |k|
         sizes = Array.new(k)
@@ -174,21 +160,21 @@ module Ckmeans
     end
 
     def dissim(j, i, xsum, xsumsq)
-      sji = 0.0
+      return 0.0 if j >= i
 
-      if j >= i
-        sji = 0.0
-      elsif j > 0
-        muji = (xsum[i] - xsum[j - 1]) / (i - j + 1)
-        sji = xsumsq[i] - xsumsq[j - 1] - ((i - j + 1) * muji * muji)
-      else
-        sji = xsumsq[i] - (xsum[i] * xsum[i] / (i + 1))
-      end
+      sji =
+        if j > 0
+          segment_sum = xsum[i] - xsum[j - 1]
+          segment_size = i - j + 1
+          xsumsq[i] - xsumsq[j - 1] - (segment_sum * segment_sum / segment_size)
+        else
+          xsumsq[i] - (xsum[i] * xsum[i] / (i + 1))
+        end
 
       [0, sji].max
     end
 
-    def fill_row_q_linear(imin, imax, q, smat, jmat, xsum, xsumsq)
+    def fill_row(q, imin, imax, smat, jmat, xsum, xsumsq)
       size = imax - q + 1
 
       js = Array.new(size) { |i| q + i }
@@ -235,13 +221,13 @@ module Ckmeans
 
     def js_reduced(imin, imax, istep, q, js, smat, _jmat, xsum, xsumsq)
       n = ((imax - imin) / istep) + 1
+      m = js.size
+
+      return js if n >= m
+
       js_red = js.dup
-
-      return js_red if n >= js.size
-
       left = -1
       right = 0
-      m = js_red.size
 
       while m > n
         p = left + 1
