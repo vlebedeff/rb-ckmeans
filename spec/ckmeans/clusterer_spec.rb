@@ -58,15 +58,18 @@ RSpec.describe Ckmeans::SmawkClusterer do
     end
 
     specify do
-      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1, 8).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
+      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1,
+                                 8).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
     end
 
     specify do
-      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1, 3, :sensitive).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
+      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1, 3,
+                                 :sensitive).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
     end
 
     specify do
-      expect(described_class.new([3.5, 3.6, 3.7, 3.1, 1.1, 0.9, 0.8, 2.2, 1.9, 2.1], 1, 5).clusters).to eq([[0.8, 0.9, 1.1], [1.9, 2.1, 2.2], [3.1, 3.5, 3.6, 3.7]])
+      expect(described_class.new([3.5, 3.6, 3.7, 3.1, 1.1, 0.9, 0.8, 2.2, 1.9, 2.1], 1,
+                                 5).clusters).to eq([[0.8, 0.9, 1.1], [1.9, 2.1, 2.2], [3.1, 3.5, 3.6, 3.7]])
     end
 
     specify do
@@ -88,7 +91,7 @@ RSpec.describe Ckmeans::SmawkClusterer do
     end
 
     context "cosine sequence" do
-      let(:x)  { (-10..10).map { |i| Math.cos(i) } }
+      let(:x) { (-10..10).map { |i| Math.cos(i) } }
 
       specify "regular sensitivity" do
         clusters = described_class.new(x, 1, x.size).clusters
@@ -108,7 +111,8 @@ RSpec.describe Ckmeans::SmawkClusterer do
     end
 
     specify do
-      expect(described_class.new([-1, 2, -1, 2, 4, 5, 6, -1, 2, -1], 3).clusters).to eq([[-1, -1, -1, -1], [2, 2, 2], [4, 5, 6]])
+      expect(described_class.new([-1, 2, -1, 2, 4, 5, 6, -1, 2, -1],
+                                 3).clusters).to eq([[-1, -1, -1, -1], [2, 2, 2], [4, 5, 6]])
     end
 
     specify do
@@ -124,7 +128,6 @@ RSpec.describe Ckmeans::SmawkClusterer do
         eq([[-9.5, -6.3, -6], [-3, 2.2], [7, 7, 9, 11], [32.3], [62.5], [75], [82.6], [95.2]])
       )
     end
-
 
     it "processes 1000 elements into optimimal cluster count within 3s" do
       entries = Array.new(1000) { rand * 10_000.0 }
