@@ -44,7 +44,7 @@ RSpec.describe Ckmeans::SmawkClusterer do
     context "small set with two unique values" do
       let(:x) { [100, 100, 100, 99_999] }
 
-      it "are split with explicit kmin" do
+      it "is split with explicit kmin" do
         expect(described_class.new(x, 2).clusters).to eq([[100, 100, 100], [99_999]])
       end
 
@@ -52,7 +52,7 @@ RSpec.describe Ckmeans::SmawkClusterer do
         expect(described_class.new(x, 1, 4).clusters).to eq([[100, 100, 100, 99_999]])
       end
 
-      it "penalizes extra clusters with regular sensitivity" do
+      it "penalizes extra clusters with high sensitivity" do
         expect(described_class.new(x, 1, 4, :sensitive).clusters).to eq([[100, 100, 100, 99_999]])
       end
     end
