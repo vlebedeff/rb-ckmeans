@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary = "Ruby implementation of Ckmeans.1d.dp"
   spec.description = "TODO: Write a longer description or delete this line."
-  spec.homepage = "TODO: Put your gem's website or public repo URL here."
+  spec.homepage = "https://github.com/vlebedeff/rb-ckmeans"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
