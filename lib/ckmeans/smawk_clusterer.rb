@@ -26,8 +26,6 @@ module Ckmeans
           @smat = Array.new(kmax) { Array.new(xcount) { 0.0 } }
           @jmat = Array.new(kmax) { Array.new(xcount) { 0 } }
 
-          puts "will fill matrix"
-          # fill matrix start
           kappa = kmax
           n = xcount
           xsum = Array.new(n)
@@ -36,25 +34,20 @@ module Ckmeans
           shift = xsorted[n / 2]
           xsum[0] = xsorted[0] - shift
           xsumsq[0] = xsum[0]**2
-          # smat[0][0] = 0.0
-          # jmat[0][0] = 0
           1.upto(n - 1) do |i|
             xsum[i] = xsum[i - 1] + xsorted[i] - shift
             xsumsq[i] = xsumsq[i - 1] + (xsorted[i] - shift) * (xsorted[i] - shift)
             smat[0][i] = dissim(0, i, xsum, xsumsq)
             jmat[0][i] = 0
           end
-          puts "finished initializing xsum, xsumsq, smat, jmat"
 
           kappa_dec = kappa - 1
           1.upto(kappa_dec) do |q|
             imin = q < kappa_dec ? [1, q].max : n - 1
-            puts "will fill row #{q} of #{kappa_dec}"
             fill_row_q_linear(imin, n - 1, q, smat, jmat, xsum, xsumsq)
           end
 
-          # fill matrix end
-          kopt = select_levels(jmat)
+          kopt = select_levels_3_4_12(jmat)
 
           results = []
           backtrack(jmat, kopt) do |q, left, right|
@@ -66,79 +59,92 @@ module Ckmeans
 
     private
 
-    def select_levels(jmat)
-      return [kmin, kmax].min if kmin > kmax || xcount < 2
+    def range_of_variance(x)
+      dposmin = x[-1] - x[0]
+      dposmax = 0.0
 
+      (1...x.size).each do |n|
+        d = x[n] - x[n-1]
+        dposmin = d if d > 0 && dposmin > d
+        dposmax = d if d > dposmax
+      end
+
+      variance_min = dposmin * dposmin / 3.0
+      variance_max = dposmax * dposmax
+
+      [variance_min, variance_max]
+    end
+
+    def select_levels_3_4_12(jmat)
+      method = "normal" # "uniform" or "normal"
       kopt = kmin
-      bicmax = -Float::INFINITY
+      base = 0
+      n = xsorted.size - base
+      max_bic = 0.0
+      bic_values = {}
 
-      lambda_ = Array.new(kmax)
-      mu = Array.new(kmax)
-      sigma2 = Array.new(kmax)
-      coeff = Array.new(kmax)
+      kmin.upto(kmax) do |k|
+        sizes = Array.new(k + base)
+        backtrack(jmat, k) { |q, left, right| sizes[q + base] = right - left + 1 }
+        index_left = base
+        index_right = nil
+        loglikelihood = 0.0
+        bin_left = nil
+        bin_right = nil
 
-      kmin.upto(kmax) do |kappa|
-        sizes = Array.new(kappa)
+        k.times do |kb|
+          num_points_in_bin = sizes[kb + base]
+          index_right = index_left + num_points_in_bin - 1
 
-        backtrack(jmat, kappa) { |q, left, right| sizes[q] = right - left + 1 }
+          if xsorted[index_left] < xsorted[index_right]
+            bin_left = xsorted[index_left]
+            bin_right = xsorted[index_right]
+          elsif xsorted[index_left] == xsorted[index_right]
+            bin_left = (index_left == base) ?
+                       xsorted[base] :
+                       (xsorted[index_left-1] + xsorted[index_left]) / 2.0
+            bin_right = (index_right < n-1+base) ?
+                        (xsorted[index_right] + xsorted[index_right+1]) / 2.0 :
+                        xsorted[n-1+base]
+          else
+            raise "ERROR: binLeft > binRight"
+          end
 
-        ileft = 0
-        iright = nil
+          bin_width = bin_right - bin_left
 
-        kappa.times do |k|
-          lambda_[k] = sizes[k] / xcount.to_f
-          iright = ileft + sizes[k] - 1
+          if method == "uniform"
+            density = num_points_in_bin / bin_width / n
+            loglikelihood += num_points_in_bin * Math.log(density)
+          else # normal
+            mean, variance = shifted_data_variance(index_left, index_right)
 
-          mu[k], sigma2[k] = shifted_data_variance(ileft, iright)
+            if variance > 0
+              (index_left..index_right).each do |i|
+                loglikelihood += -(xsorted[i] - mean) * (xsorted[i] - mean) / (2.0 * variance)
+              end
+              loglikelihood += num_points_in_bin *
+                               (Math.log(num_points_in_bin / n.to_f) -
+                               0.5 * Math.log(2.0 * Math::PI * variance))
+            else
+              loglikelihood += num_points_in_bin * Math.log(1.0 / bin_width / n)
+            end
+          end
 
-          if sigma2[k] == 0 || sizes[k] == 1
-            dmin =
-              if (ileft > 0) && (iright < (xcount - 1))
-                [xsorted[ileft] - xsorted[ileft - 1], xsorted[iright + 1] - xsorted[iright]].min
-              elsif ileft > 0
-                xsorted[ileft] - xsorted[ileft - 1]
-              else
-                xsorted[iright + 1] - xsorted[iright]
+          index_left = index_right + 1
+        end
+
+        bic = if method == "uniform"
+                2.0 * loglikelihood - (3 * k - 1) * Math.log(n)
+              elsif method == "normal"
+                2.0 * loglikelihood - (3 * k - 1) * Math.log(n.to_f)
               end
 
-            sigma2[k] = dmin * dmin / 4.0 / 9.0 if sigma2[k] == 0
-            sigma2[k] = dmin * dmin if sizes[k] == 1
-          end
-
-          coeff[k] = lambda_[k] / Math.sqrt(2.0 * Math::PI * sigma2[k])
-
-          ileft = iright + 1
-        end
-
-        loglikelihood = 0
-
-        # xcount.times do |i|
-        #   likelihood = 0.0
-
-        #   kappa.times do |k|
-        #     likelihood += coeff[k] * Math.exp( - (xsorted[i] - mu[k]) ** 2 / (2.0 * sigma2[k]))
-        #   end
-
-        #   loglikelihood += Math.log(likelihood)
-        # end
-
-        xcount.times do |i|
-          likelihood = 0.0
-          kappa.times do |k|
-            likelihood += coeff[k] * Math.exp( - (xsorted[i] - mu[k]) * (xsorted[i] - mu[k]) / (2.0 * sigma2[k]))
-          end
-
-          # Avoid Math.log(0)
-          loglikelihood += Math.log([likelihood, 1e-300].max)
-        end
-
-        bic = 2 * loglikelihood - (3 * kappa - 1) * Math.log(xcount.to_f)
-
-        if kappa == kmin
-          bicmax = bic
+        if k == kmin
+          max_bic = bic
           kopt = kmin
-        else
-          bicmax, kopt = bic, kappa if bic > bicmax
+        elsif bic > max_bic
+          max_bic = bic
+          kopt = k
         end
       end
 
@@ -203,11 +209,10 @@ module Ckmeans
     end
 
     def smawk(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
-      puts "smawk called with imin: #{imin}, #{istep}, q: #{q}, js: #{js}"
       if (imax - imin) <= (0 * istep)
         find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
       else
-        js_odd = reduce_in_place(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
+        js_odd = js_reduced(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
         istepx2 = istep * 2
         imin_odd = imin + istep
         imax_odd = imin_odd + (imax - imin_odd) / istepx2 * istepx2
@@ -217,7 +222,6 @@ module Ckmeans
     end
 
     def find_min_from_candidates(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
-      puts "find_min_from_candidates called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
       rmin_prev = 0
 
       (imin..imax).step(istep) do |i|
@@ -242,9 +246,7 @@ module Ckmeans
       end
     end
 
-    # TODO: Rename to `js_reduced`
-    def reduce_in_place(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
-      puts "reduce in place called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
+    def js_reduced(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
       n = (imax - imin) / istep + 1
       js_red = js.dup
 
@@ -291,7 +293,6 @@ module Ckmeans
     end
 
     def fill_even_positions(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
-      puts "fill_even_positions called with imin: #{imin}, imax: #{imax}, istep: #{istep}, q: #{q}, js: #{js}"
       n = js.size
       istepx2 = istep * 2
       jl = js[0]
