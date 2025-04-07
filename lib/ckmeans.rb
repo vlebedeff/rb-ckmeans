@@ -2,6 +2,7 @@
 
 require_relative "ckmeans/version"
 require_relative "ckmeans/clusterer"
+require "ckmeans/extensions"
 
 module Ckmeans
   class Error < StandardError; end
