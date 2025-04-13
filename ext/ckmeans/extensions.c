@@ -27,8 +27,8 @@ void  *arena_alloc(Arena*, size_t);
 void   arena_rewind(Arena*);
 void   arena_destroy(Arena*);
 
-MatrixF *matrixf_create(Arena*, uint64_t, uint64_t);
-MatrixI *matrixi_create(Arena*, uint64_t, uint64_t);
+MatrixF *matrix_create_f(Arena*, uint64_t, uint64_t);
+MatrixI *matrix_create_i(Arena*, uint64_t, uint64_t);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -61,18 +61,18 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         return Qnil;
     }
 
-    MatrixF *smat = matrixf_create(arena, kmax, xcount);
-    MatrixI *jmat = matrixi_create(arena, kmax, xcount);
+    MatrixF *cost = matrix_create_f(arena, kmax, xcount);
+    MatrixI *partitions = matrix_create_i(arena, kmax, xcount);
 
-    smat; // use the var to silence warnings
-    jmat; // use the var to silence warnings
+    cost; // use the var to silence warnings
+    partitions; // use the var to silence warnings
 
     arena_destroy(arena);
 
     return Qnil;
 }
 
-MatrixF *matrixf_create(Arena *arena, uint64_t nrows, uint64_t ncols) {
+MatrixF *matrix_create_f(Arena *arena, uint64_t nrows, uint64_t ncols) {
     MatrixF *m;
 
     m = arena_alloc(arena, sizeof(*m));
@@ -81,7 +81,7 @@ MatrixF *matrixf_create(Arena *arena, uint64_t nrows, uint64_t ncols) {
     return m;
 }
 
-MatrixI *matrixi_create(Arena *arena, uint64_t nrows, uint64_t ncols) {
+MatrixI *matrix_create_i(Arena *arena, uint64_t nrows, uint64_t ncols) {
     MatrixI *m;
 
     m = arena_alloc(arena, sizeof(*m));
