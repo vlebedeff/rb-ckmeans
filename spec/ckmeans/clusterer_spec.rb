@@ -193,4 +193,12 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       expect(bm.total).to be < 2
     end
   end
+
+  describe "#xsorted_cluster_index", :focus do
+    let(:clusterer) { described_class.new([], 0, 0) }
+
+    specify do
+      expect(clusterer.xsorted_cluster_index).to be_nil
+    end
+  end
 end
