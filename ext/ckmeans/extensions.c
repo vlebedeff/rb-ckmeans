@@ -42,10 +42,17 @@ typedef struct State {
     VectorF *xsumsq;
 } State;
 
-Arena *arena_create(uint64_t);
-void  *arena_alloc(Arena*, size_t);
-void   arena_rewind(Arena*);
-void   arena_destroy(Arena*);
+typedef struct RowParams {
+    int64_t row;
+    int64_t imin;
+    int64_t imax;
+    int64_t istep;
+} RowParams;
+
+Arena       *arena_create(uint64_t);
+void        *arena_alloc(Arena*, size_t);
+void         arena_rewind(Arena*);
+void         arena_destroy(Arena*);
 
 MatrixF     *matrix_create_f(Arena*, uint64_t, uint64_t);
 MatrixI     *matrix_create_i(Arena*, uint64_t, uint64_t);
@@ -58,9 +65,9 @@ void         vector_set_f(VectorF*, uint64_t offset, long double value);
 void         vector_set_i(VectorI*, uint64_t offset, int64_t value);
 long double  vector_get_f(VectorF*, uint64_t offset);
 
-long double  dissimilarity(uint64_t, uint64_t, VectorF*, VectorF*);
-void         fill_row(State, uint64_t, uint64_t, uint64_t);
-void         smawk(State, uint64_t, uint64_t, uint64_t, uint64_t, VectorI*);
+long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
+void         fill_row(State, int64_t, int64_t, int64_t);
+void         smawk(State, RowParams, VectorI*);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -81,9 +88,9 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     /* VALUE rb_kmin    = rb_ivar_get(self, rb_intern("@kmin")); */
     VALUE rb_kmax    = rb_ivar_get(self, rb_intern("@kmax"));
     VALUE rb_xsorted = rb_ivar_get(self, rb_intern("@xsorted"));
-    uint64_t xcount  = NUM2ULL(rb_xcount);
-    /* uint64_t kmin    = NUM2ULL(rb_kmin); */
-    uint64_t kmax    = NUM2ULL(rb_kmax);
+    int64_t xcount   = NUM2LL(rb_xcount);
+    /* int64_t kmin    = NUM2LL(rb_kmin); */
+    int64_t kmax     = NUM2LL(rb_kmax);
     Arena *arena     = arena_create(xcount * kmax * ALLOCATION_FACTOR);
 
     if (arena == NULL) {
@@ -97,18 +104,18 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     VectorF *xsumsq  = vector_create_f(arena, xcount);
     State    state   = { .arena = arena, .cost = cost, .breaks = breaks, .xsum = xsum, .xsumsq = xsumsq };
 
-    for (uint64_t i = 0; i < xcount; i++) {
+    for (int64_t i = 0; i < xcount; i++) {
         long double xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
         vector_set_f(xsorted, i, xi);
         printf("XSORTED[%llu]: %Lf\n", i, vector_get_f(xsorted, i));
     }
 
-    uint64_t shift = vector_get_f(xsorted, xcount / 2);
+    int64_t shift = vector_get_f(xsorted, xcount / 2);
     long double diff_initial = vector_get_f(xsorted, 0) - shift;
     vector_set_f(xsum, 0, diff_initial);
     vector_set_f(xsumsq, 0, diff_initial * diff_initial);
 
-    for (uint64_t i = 1; i < xcount; i++) {
+    for (int64_t i = 1; i < xcount; i++) {
         long double xi = vector_get_f(xsorted, i);
         long double xsum_prev = vector_get_f(xsum, i - 1);
         long double xsumsq_prev = vector_get_f(xsumsq, i - 1);
@@ -121,8 +128,8 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     }
 
 
-    for (uint64_t q = 1; q < kmax - 1; q++) {
-        uint64_t imin = (q < kmax - 1) ? ((q > 1) ? q : 1) : xcount - 1;
+    for (int64_t q = 1; q < kmax - 1; q++) {
+        int64_t imin = (q < kmax - 1) ? ((q > 1) ? q : 1) : xcount - 1;
         fill_row(state, q, imin, xcount - 1);
     }
 
@@ -131,16 +138,31 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     return Qnil;
 }
 
-void fill_row(State state, uint64_t q, uint64_t imin, uint64_t imax) {
-    uint64_t size = imax - q + 1;
+void fill_row(State state, int64_t q, int64_t imin, int64_t imax) {
+    int64_t size = imax - q + 1;
     VectorI *split_candidates = vector_create_i(state.arena, size);
-    for (uint64_t i = 0; i < size; i++) {
+    for (int64_t i = 0; i < size; i++) {
         vector_set_i(split_candidates, i, q + i);
     }
-    /* smawk(state, imin, imax, 1, q, split_candidates); */
+    RowParams rparams = { .row = q, .imin = imin, .imax = imax, .istep = 1 };
+    smawk(state, rparams, split_candidates);
 }
 
-long double dissimilarity(uint64_t i, uint64_t j, VectorF *xsum, VectorF *xsumsq) {
+void smawk(State state, RowParams rparams, VectorI *split_candidates) {
+    if ((rparams.imax - rparams.imin) <= (0 * rparams.istep)) {
+        /* NOT IMPLEMENTED */
+        /* find_min_from_candidates(state, q, imin, imax, istep, split_candidates); */
+        return;
+    } else {
+        /* NOT IMPLEMENTED */
+        return;
+    }
+}
+
+/* void find_min_from_candidates(State state, VectorI *split_candidates, uint64_t q, uint64_t imin, uint64_t imax, int64_t istep) { */
+/* } */
+
+long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) {
     long double sji = 0.0;
 
     if (j >= i) return sji;
