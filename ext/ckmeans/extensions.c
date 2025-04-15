@@ -38,7 +38,7 @@ typedef struct VectorI {
 typedef struct State {
     Arena   *arena;
     MatrixF *cost;
-    MatrixI *breaks;
+    MatrixI *splits;
     VectorF *xsum;
     VectorF *xsumsq;
 } State;
@@ -58,17 +58,20 @@ void         arena_destroy(Arena*);
 MatrixF     *matrix_create_f(Arena*, size_t, size_t);
 MatrixI     *matrix_create_i(Arena*, size_t, size_t);
 void         matrix_set_f(MatrixF*, size_t, size_t, long double value);
+long double  matrix_get_f(MatrixF*, size_t, size_t);
 void         matrix_set_i(MatrixI*, size_t, size_t, int64_t value);
 
 VectorF     *vector_create_f(Arena*, size_t);
 VectorI     *vector_create_i(Arena*, size_t);
 void         vector_set_f(VectorF*, size_t offset, long double value);
 void         vector_set_i(VectorI*, size_t offset, int64_t value);
+int64_t      vector_get_i(VectorI*, size_t offset);
 long double  vector_get_f(VectorF*, size_t offset);
 
 long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
 void         fill_row(State, int64_t, int64_t, int64_t);
 void         smawk(State, RowParams, VectorI*);
+void         find_min_from_candidates(State, RowParams, VectorI*);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -99,11 +102,11 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     }
 
     MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
-    MatrixI *breaks  = matrix_create_i(arena, kmax, xcount);
+    MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
     VectorF *xsorted = vector_create_f(arena, xcount);
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
-    State    state   = { .arena = arena, .cost = cost, .breaks = breaks, .xsum = xsum, .xsumsq = xsumsq };
+    State    state   = { .arena = arena, .cost = cost, .splits = splits, .xsum = xsum, .xsumsq = xsumsq };
 
     for (int64_t i = 0; i < xcount; i++) {
         long double xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
@@ -125,7 +128,7 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         vector_set_f(xsum, i, xsum_prev + diff);
         vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
         matrix_set_f(cost, 0, i, dissimilarity(0, i, xsum, xsumsq));
-        matrix_set_i(breaks, 0, i, 0);
+        matrix_set_i(splits, 0, i, 0);
     }
 
 
@@ -151,17 +154,42 @@ void fill_row(State state, int64_t q, int64_t imin, int64_t imax) {
 
 void smawk(State state, RowParams rparams, VectorI *split_candidates) {
     if ((rparams.imax - rparams.imin) <= (0 * rparams.istep)) {
-        /* NOT IMPLEMENTED */
-        /* find_min_from_candidates(state, q, imin, imax, istep, split_candidates); */
-        return;
+        find_min_from_candidates(state, rparams, split_candidates);
     } else {
         /* NOT IMPLEMENTED */
         return;
     }
 }
 
-/* void find_min_from_candidates(State state, VectorI *split_candidates, uint64_t q, uint64_t imin, uint64_t imax, int64_t istep) { */
-/* } */
+void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates) {
+    int64_t rmin_prev = 0;
+
+    for (int64_t i = rparams.imin; i <= rparams.imax; i += rparams.istep) {
+        int64_t rmin = rmin_prev;
+        int64_t split_candidate = vector_get_i(split_candidates, rmin);
+        int64_t cost_prev = matrix_get_f(state.cost, rparams.row - 1, split_candidate - 1);
+        long double added_cost = dissimilarity(split_candidate, i, state.xsum, state.xsumsq);
+
+        matrix_set_f(state.cost, rparams.row, i, cost_prev + added_cost);
+        matrix_set_i(state.splits, rparams.row, i, split_candidate);
+
+        for (size_t r = rmin + 1; r < split_candidates->nvalues; r++) {
+            int64_t split = vector_get_i(split_candidates, r);
+
+            if (split < matrix_get_f(state.cost, rparams.row - 1, i)) continue;
+            if (split > i) break;
+
+            long double split_cost =
+                matrix_get_f(state.cost, rparams.row - 1, split - 1) + dissimilarity(split, i, state.xsum, state.xsumsq);
+
+            if (split_cost <= matrix_get_f(state.cost, rparams.row, i)) continue;
+
+            matrix_set_f(state.cost, rparams.row, i, split_cost);
+            matrix_set_i(state.splits, rparams.row, i, split);
+            rmin_prev = r;
+        }
+    }
+}
 
 long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) {
     long double sji = 0.0;
@@ -212,6 +240,12 @@ void vector_set_i(VectorI *v, size_t offset, int64_t value) {
     *(v->values + offset) = value;
 }
 
+int64_t vector_get_i(VectorI *v, size_t offset) {
+    assert(i < v->nvalues && "[vector_get_i] element index should be less than nvalues");
+
+    return *(v->values + offset);
+}
+
 long double vector_get_f(VectorF *v, size_t offset) {
     assert(i < v->nvalues && "[vector_get_f] element index should be less than nvalues");
 
@@ -246,6 +280,14 @@ void matrix_set_f(MatrixF *m, size_t i, size_t j, long double value) {
 
     size_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
+}
+
+long double matrix_get_f(MatrixF *m, size_t i, size_t j) {
+    assert(i < m->nrows && "[matrix_get_f] row offset should be less than nrows");
+    assert(j < m->cols &&  "[matrix_get_f] col offset should be less than ncols");
+
+    size_t offset = i * m->ncols + j;
+    return *(m->values + offset);
 }
 
 void matrix_set_i(MatrixI *m, size_t i, size_t j, int64_t value) {
