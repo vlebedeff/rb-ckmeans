@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include "ruby.h"
 
 #define ARENA_MIN_CAPACITY 1024
@@ -13,24 +14,24 @@ typedef struct Arena {
 } Arena;
 
 typedef struct MatrixF {
-    uint64_t ncols;
-    uint64_t nrows;
+    size_t ncols;
+    size_t nrows;
     long double *values;
 } MatrixF;
 
 typedef struct MatrixI {
-    uint64_t ncols;
-    uint64_t nrows;
+    size_t ncols;
+    size_t nrows;
     int64_t *values;
 } MatrixI;
 
 typedef struct VectorF {
-    uint64_t nvalues;
+    size_t nvalues;
     long double *values;
 } VectorF;
 
 typedef struct VectorI {
-    uint64_t nvalues;
+    size_t nvalues;
     int64_t *values;
 } VectorI;
 
@@ -54,16 +55,16 @@ void        *arena_alloc(Arena*, size_t);
 void         arena_rewind(Arena*);
 void         arena_destroy(Arena*);
 
-MatrixF     *matrix_create_f(Arena*, uint64_t, uint64_t);
-MatrixI     *matrix_create_i(Arena*, uint64_t, uint64_t);
-void         matrix_set_f(MatrixF*, uint64_t, uint64_t, long double value);
-void         matrix_set_i(MatrixI*, uint64_t, uint64_t, int64_t value);
+MatrixF     *matrix_create_f(Arena*, size_t, size_t);
+MatrixI     *matrix_create_i(Arena*, size_t, size_t);
+void         matrix_set_f(MatrixF*, size_t, size_t, long double value);
+void         matrix_set_i(MatrixI*, size_t, size_t, int64_t value);
 
-VectorF     *vector_create_f(Arena*, uint64_t);
-VectorI     *vector_create_i(Arena*, uint64_t);
-void         vector_set_f(VectorF*, uint64_t offset, long double value);
-void         vector_set_i(VectorI*, uint64_t offset, int64_t value);
-long double  vector_get_f(VectorF*, uint64_t offset);
+VectorF     *vector_create_f(Arena*, size_t);
+VectorI     *vector_create_i(Arena*, size_t);
+void         vector_set_f(VectorF*, size_t offset, long double value);
+void         vector_set_i(VectorI*, size_t offset, int64_t value);
+long double  vector_get_f(VectorF*, size_t offset);
 
 long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
 void         fill_row(State, int64_t, int64_t, int64_t);
@@ -179,7 +180,7 @@ long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) 
     return (sji > 0) ? sji : 0.0;
 }
 
-VectorF *vector_create_f(Arena *arena, uint64_t nvalues) {
+VectorF *vector_create_f(Arena *arena, size_t nvalues) {
     VectorF *v;
 
     v = arena_alloc(arena, sizeof(*v));
@@ -189,7 +190,7 @@ VectorF *vector_create_f(Arena *arena, uint64_t nvalues) {
     return v;
 }
 
-VectorI *vector_create_i(Arena *arena, uint64_t nvalues) {
+VectorI *vector_create_i(Arena *arena, size_t nvalues) {
     VectorI *v;
 
     v = arena_alloc(arena, sizeof(*v));
@@ -199,34 +200,25 @@ VectorI *vector_create_i(Arena *arena, uint64_t nvalues) {
     return v;
 }
 
-void vector_set_f(VectorF *v, uint64_t offset, long double value) {
-    if (offset < 0 || offset >= v->nvalues) {
-        printf("[Vector] %llu is out bounds", offset);
-        return;
-    }
+void vector_set_f(VectorF *v, size_t offset, long double value) {
+    assert(i < v->nvalues && "[vector_set_f] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
-void vector_set_i(VectorI *v, uint64_t offset, int64_t value) {
-    if (offset < 0 || offset >= v->nvalues) {
-        printf("[Vector] %llu is out bounds", offset);
-        return;
-    }
+void vector_set_i(VectorI *v, size_t offset, int64_t value) {
+    assert(i < v->nvalues && "[vector_set_i] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
-long double vector_get_f(VectorF *v, uint64_t offset) {
-    if (offset < 0 || offset >= v->nvalues) {
-        printf("[Vector] %llu is out bounds", offset);
-        return 0;
-    }
+long double vector_get_f(VectorF *v, size_t offset) {
+    assert(i < v->nvalues && "[vector_get_f] element index should be less than nvalues");
 
     return *(v->values + offset);
 }
 
-MatrixF *matrix_create_f(Arena *arena, uint64_t ncols, uint64_t nrows) {
+MatrixF *matrix_create_f(Arena *arena, size_t ncols, size_t nrows) {
     MatrixF *m;
 
     m = arena_alloc(arena, sizeof(*m));
@@ -237,7 +229,7 @@ MatrixF *matrix_create_f(Arena *arena, uint64_t ncols, uint64_t nrows) {
     return m;
 }
 
-MatrixI *matrix_create_i(Arena *arena, uint64_t ncols, uint64_t nrows) {
+MatrixI *matrix_create_i(Arena *arena, size_t ncols, size_t nrows) {
     MatrixI *m;
 
     m = arena_alloc(arena, sizeof(*m));
@@ -248,33 +240,19 @@ MatrixI *matrix_create_i(Arena *arena, uint64_t ncols, uint64_t nrows) {
     return m;
 }
 
-void matrix_set_f(MatrixF *m, uint64_t i, uint64_t j, long double value) {
-    if (i < 0 || i >= m->nrows) {
-        printf("[matrix_set_f] i=%llu is out of bounds\n", i);
-        return;
-    }
+void matrix_set_f(MatrixF *m, size_t i, size_t j, long double value) {
+    assert(i < m->nrows && "[matrix_set_f] row offset should be less than nrows");
+    assert(j < m->cols &&  "[matrix_set_f] col offset should be less than ncols");
 
-    if (j < 0 || i >= m->ncols) {
-        printf("[matrix_set_f] j=%llu is out of bounds\n", j);
-        return;
-    }
-
-    uint64_t offset = i * m->ncols + j;
+    size_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
-void matrix_set_i(MatrixI *m, uint64_t i, uint64_t j, int64_t value) {
-    if (i < 0 || i >= m->nrows) {
-        printf("[matrix_set_f] i=%llu is out of bounds\n", i);
-        return;
-    }
+void matrix_set_i(MatrixI *m, size_t i, size_t j, int64_t value) {
+    assert(i < m->nrows && "[matrix_set_i] row offset should be less than nrows");
+    assert(j < m->cols &&  "[matrix_set_i] col offset should be less than ncols");
 
-    if (j < 0 || i >= m->ncols) {
-        printf("[matrix_set_f] j=%llu is out of bounds\n", j);
-        return;
-    }
-
-    uint64_t offset = i * m->ncols + j;
+    size_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
