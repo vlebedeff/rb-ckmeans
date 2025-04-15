@@ -195,15 +195,16 @@ module Ckmeans
     end
 
     def find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
-      rmin_prev = 0
+      optimal_split_index_prev = 0
 
       (imin..imax).step(istep) do |i|
-        rmin = rmin_prev
-        smat[q][i] = smat[q - 1][js[rmin] - 1] + dissim(js[rmin], i, xsum, xsumsq)
-        jmat[q][i] = js[rmin]
+        optimal_split_index = optimal_split_index_prev
+        optimal_split = js[optimal_split_index]
+        smat[q][i] = smat[q - 1][optimal_split - 1] + dissim(optimal_split, i, xsum, xsumsq)
+        jmat[q][i] = optimal_split
 
-        ((rmin + 1)...js.size).each do |r|
-          jabs = js[r]
+        ((optimal_split_index + 1)...js.size).each do |split_index|
+          jabs = js[split_index]
 
           next if jabs < jmat[q - 1][i]
           break if jabs > i
@@ -213,8 +214,8 @@ module Ckmeans
           next unless sj <= smat[q][i]
 
           smat[q][i] = sj
-          jmat[q][i] = js[r]
-          rmin_prev = r
+          jmat[q][i] = js[split_index]
+          optimal_split_index = split_index
         end
       end
     end

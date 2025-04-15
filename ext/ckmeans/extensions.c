@@ -163,19 +163,20 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates) {
     }
 }
 
-void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates) {
-    int64_t rmin_prev = 0;
-
-    for (int64_t i = rparams.imin; i <= rparams.imax; i += rparams.istep) {
-        int64_t rmin = rmin_prev;
-        int64_t split_candidate = vector_get_i(split_candidates, rmin);
-        int64_t cost_prev = matrix_get_f(state.cost, rparams.row - 1, split_candidate - 1);
-        long double added_cost = dissimilarity(split_candidate, i, state.xsum, state.xsumsq);
+void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
+{
+    for (int64_t optimal_split_idx_prev = 0, i = rparams.imin; i <= rparams.imax; i += rparams.istep)
+    {
+        int64_t optimal_split_idx   = optimal_split_idx_prev;
+        int64_t optimal_split       = vector_get_i(split_candidates, optimal_split_idx);
+        int64_t cost_prev           = matrix_get_f(state.cost, rparams.row - 1, optimal_split - 1);
+        long double added_cost      = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
 
         matrix_set_f(state.cost, rparams.row, i, cost_prev + added_cost);
-        matrix_set_i(state.splits, rparams.row, i, split_candidate);
+        matrix_set_i(state.splits, rparams.row, i, optimal_split);
 
-        for (size_t r = rmin + 1; r < split_candidates->nvalues; r++) {
+        for (size_t r = optimal_split_idx + 1; r < split_candidates->nvalues; r++)
+        {
             int64_t split = vector_get_i(split_candidates, r);
 
             if (split < matrix_get_f(state.cost, rparams.row - 1, i)) continue;
@@ -188,7 +189,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
 
             matrix_set_f(state.cost, rparams.row, i, split_cost);
             matrix_set_i(state.splits, rparams.row, i, split);
-            rmin_prev = r;
+            optimal_split_idx_prev = r;
         }
     }
 }
