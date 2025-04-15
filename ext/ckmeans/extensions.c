@@ -66,7 +66,9 @@ VectorI     *vector_create_i(Arena*, size_t);
 void         vector_set_f(VectorF*, size_t offset, long double value);
 void         vector_set_i(VectorI*, size_t offset, int64_t value);
 int64_t      vector_get_i(VectorI*, size_t offset);
+int64_t      vector_get_diff_i(VectorI*, size_t, size_t);
 long double  vector_get_f(VectorF*, size_t offset);
+long double  vector_get_diff_f(VectorF*, size_t, size_t);
 
 long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
 void         fill_row(State, int64_t, int64_t, int64_t);
@@ -197,9 +199,9 @@ long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) 
     if (j >= i) return sji;
 
     if (j > 0) {
-        long double segment_sum = vector_get_f(xsum, i) - vector_get_f(xsum, j - 1);
+        long double segment_sum = vector_get_diff_f(xsum, i, j - 1);
         int64_t segment_size = i - j + 1;
-        sji = vector_get_f(xsumsq, i) - vector_get_f(xsumsq, j - 1) - (segment_sum * segment_sum / segment_size);
+        sji = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
     } else {
         long double xsumi = vector_get_f(xsum, i);
         sji = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
@@ -229,27 +231,41 @@ VectorI *vector_create_i(Arena *arena, size_t nvalues) {
 }
 
 void vector_set_f(VectorF *v, size_t offset, long double value) {
-    assert(i < v->nvalues && "[vector_set_f] element index should be less than nvalues");
+    assert(offset < v->nvalues && "[vector_set_f] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
 void vector_set_i(VectorI *v, size_t offset, int64_t value) {
-    assert(i < v->nvalues && "[vector_set_i] element index should be less than nvalues");
+    assert(offset < v->nvalues && "[vector_set_i] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
 int64_t vector_get_i(VectorI *v, size_t offset) {
-    assert(i < v->nvalues && "[vector_get_i] element index should be less than nvalues");
+    assert(offset < v->nvalues && "[vector_get_i] element index should be less than nvalues");
 
     return *(v->values + offset);
 }
 
+int64_t vector_get_diff_i(VectorI *v, size_t i, size_t j) {
+    assert(i < v->nvalues && "[vector_get_diff_i] i should be less than nvalues");
+    assert(j < v->nvalues && "[vector_get_diff_i] j should be less than nvalues");
+
+    return *(v->values + i) - *(v->values + j);
+}
+
 long double vector_get_f(VectorF *v, size_t offset) {
-    assert(i < v->nvalues && "[vector_get_f] element index should be less than nvalues");
+    assert(offset < v->nvalues && "[vector_get_f] element index should be less than nvalues");
 
     return *(v->values + offset);
+}
+
+long double vector_get_diff_f(VectorF *v, size_t i, size_t j) {
+    assert(i < v->nvalues && "[vector_get_diff_f] i should be less than nvalues");
+    assert(j < v->nvalues && "[vector_get_diff_f] j should be less than nvalues");
+
+    return *(v->values + i) - *(v->values + j);
 }
 
 MatrixF *matrix_create_f(Arena *arena, size_t ncols, size_t nrows) {
