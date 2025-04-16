@@ -62,18 +62,21 @@ long double  matrix_get_f(MatrixF*, size_t, size_t);
 void         matrix_set_i(MatrixI*, size_t, size_t, int64_t value);
 
 VectorF     *vector_create_f(Arena*, size_t);
-VectorI     *vector_create_i(Arena*, size_t);
 void         vector_set_f(VectorF*, size_t offset, long double value);
+long double  vector_get_f(VectorF*, size_t offset);
+long double  vector_get_diff_f(VectorF*, size_t, size_t);
+VectorI     *vector_create_i(Arena*, size_t);
+VectorI     *vector_dup_i(VectorI*, Arena*);
 void         vector_set_i(VectorI*, size_t offset, int64_t value);
 int64_t      vector_get_i(VectorI*, size_t offset);
 int64_t      vector_get_diff_i(VectorI*, size_t, size_t);
-long double  vector_get_f(VectorF*, size_t offset);
-long double  vector_get_diff_f(VectorF*, size_t, size_t);
+void         vector_downsize_i(VectorI*, size_t);
 
 long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
 void         fill_row(State, int64_t, int64_t, int64_t);
 void         smawk(State, RowParams, VectorI*);
 void         find_min_from_candidates(State, RowParams, VectorI*);
+VectorI     *prune_candidates(State, RowParams, VectorI*);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -159,6 +162,7 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates) {
         find_min_from_candidates(state, rparams, split_candidates);
     } else {
         /* NOT IMPLEMENTED */
+        /* VectorI *odd_candidates = prune_candidates(state, rparams, split_candidates); */
         return;
     }
 }
@@ -194,12 +198,64 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
     }
 }
 
+VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candidates)
+{
+    int64_t n = ((rparams.imax - rparams.imin) / rparams.istep) + 1;
+    int64_t m = split_candidates->nvalues;
+
+    if (n >= m) return split_candidates;
+
+    int64_t left = -1;
+    int64_t right = 0;
+    VectorI *pruned = vector_dup_i(split_candidates, state.arena);
+
+    while (m > n)
+    {
+        int64_t p         = left + 1;
+        int64_t i         = rparams.imin + p * rparams.istep;
+        int64_t j         = vector_get_i(pruned, right);
+        int64_t jnext     = vector_get_i(pruned, right + 1);
+        long double sl    =
+            matrix_get_f(state.cost, rparams.row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
+        long double snext =
+            matrix_get_f(state.cost, rparams.row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
+
+        if ((sl < snext) && (p < n - 1)) {
+            left++;
+            right++;
+            vector_set_i(pruned, left, j);
+        } else if ((sl < snext) && (p == n - 1)) {
+            right++;
+            m--;
+            vector_set_i(pruned, right, j);
+        } else {
+            if (p > 0) {
+                /* TODO: extract `vector_setcpy_T` */
+                vector_set_i(pruned, right, vector_get_i(pruned, left));
+                left--;
+            } else {
+                right++;
+            }
+
+            m--;
+        }
+    }
+
+    for (size_t i = left + 1; i < m; i++, right++) {
+        /* TODO: extract `vector_setcpy_T` */
+        vector_set_i(pruned, i, vector_get_i(pruned, right));
+    }
+
+    return vector_downsize_i(pruned, m);
+}
+
 long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) {
     long double sji = 0.0;
 
     if (j >= i) return sji;
 
     if (j > 0) {
+        /* TODO: looks more like `segment_delta` */
         long double segment_sum = vector_get_diff_f(xsum, i, j - 1);
         int64_t segment_size = i - j + 1;
         sji = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
@@ -224,11 +280,24 @@ VectorF *vector_create_f(Arena *arena, size_t nvalues) {
 VectorI *vector_create_i(Arena *arena, size_t nvalues) {
     VectorI *v;
 
+    /* TODO: use one allocation */
     v = arena_alloc(arena, sizeof(*v));
     v->values = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
     v->nvalues = nvalues;
 
     return v;
+}
+
+VectorI *vector_dup_i(VectorI *v, Arena *arena)
+{
+    VectorI *vdup = vector_create_i(arena, v->nvalues);
+
+    /* TODO: use one memcpy call */
+    for (size_t i = 0; i < v->nvalues; i++) {
+        vector_set_i(vdup, i, vector_get_i(v, i));
+    }
+
+    return vdup;
 }
 
 void vector_set_f(VectorF *v, size_t offset, long double value) {
