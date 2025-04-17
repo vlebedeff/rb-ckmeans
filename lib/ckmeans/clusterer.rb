@@ -26,25 +26,24 @@ module Ckmeans
         else
           @cost   = Array.new(kmax) { Array.new(xcount) { 0.0 } }
           @splits = Array.new(kmax) { Array.new(xcount) { 0 } }
+          @xsum   = Array.new(xcount)
+          @xsumsq = Array.new(xcount)
 
-          kappa = kmax
-          n = xcount
-          xsum = Array.new(n)
-          xsumsq = Array.new(n)
-          shift = xsorted[n / 2]
-          xsum[0] = xsorted[0] - shift
+          shift     = xsorted[xcount / 2]
+          xsum[0]   = xsorted[0] - shift
           xsumsq[0] = xsum[0]**2
-          1.upto(n - 1) do |i|
-            xsum[i] = xsum[i - 1] + xsorted[i] - shift
-            xsumsq[i] = xsumsq[i - 1] + ((xsorted[i] - shift) * (xsorted[i] - shift))
-            cost[0][i] = dissim(0, i, xsum, xsumsq)
+
+          1.upto(xcount - 1) do |i|
+            xsum[i]      = xsum[i - 1] + xsorted[i] - shift
+            xsumsq[i]    = xsumsq[i - 1] + ((xsorted[i] - shift) * (xsorted[i] - shift))
+            cost[0][i]   = dissim(0, i)
             splits[0][i] = 0
           end
 
-          kappa_dec = kappa - 1
-          1.upto(kappa_dec) do |q|
-            imin = q < kappa_dec ? [1, q].max : n - 1
-            fill_row(q, imin, n - 1, xsum, xsumsq)
+          kmax_idx = kmax - 1
+          1.upto(kmax_idx) do |q|
+            imin = q < kmax_idx ? [1, q].max : xcount - 1
+            fill_row(q, imin, xcount - 1)
           end
 
           kopt = koptimal
@@ -59,7 +58,7 @@ module Ckmeans
 
     private
 
-    attr_reader :cost, :splits
+    attr_reader :cost, :splits, :xsum, :xsumsq
 
     def koptimal
       kopt = kmin
@@ -161,7 +160,7 @@ module Ckmeans
       end
     end
 
-    def dissim(j, i, xsum, xsumsq)
+    def dissim(j, i)
       return 0.0 if j >= i
 
       sji =
@@ -176,33 +175,33 @@ module Ckmeans
       [0, sji].max
     end
 
-    def fill_row(q, imin, imax, xsum, xsumsq)
+    def fill_row(q, imin, imax)
       size = imax - q + 1
 
       js = Array.new(size) { |i| q + i }
-      smawk(imin, imax, 1, q, js, xsum, xsumsq)
+      smawk(imin, imax, 1, q, js)
     end
 
-    def smawk(imin, imax, istep, q, js, xsum, xsumsq)
+    def smawk(imin, imax, istep, q, js)
       if (imax - imin) <= (0 * istep)
-        find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
+        find_min_from_candidates(q, imin, imax, istep, js)
       else
-        js_odd = prune_candidates(imin, imax, istep, q, js, xsum, xsumsq)
+        js_odd = prune_candidates(imin, imax, istep, q, js)
         istepx2 = istep * 2
         imin_odd = imin + istep
         imax_odd = imin_odd + ((imax - imin_odd) / istepx2 * istepx2)
-        smawk(imin_odd, imax_odd, istepx2, q, js_odd, xsum, xsumsq)
-        fill_even_positions(imin, imax, istep, q, js, xsum, xsumsq)
+        smawk(imin_odd, imax_odd, istepx2, q, js_odd)
+        fill_even_positions(imin, imax, istep, q, js)
       end
     end
 
-    def find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
+    def find_min_from_candidates(q, imin, imax, istep, js)
       optimal_split_index_prev = 0
 
       (imin..imax).step(istep) do |i|
         optimal_split_index = optimal_split_index_prev
         optimal_split = js[optimal_split_index]
-        cost[q][i] = cost[q - 1][optimal_split - 1] + dissim(optimal_split, i, xsum, xsumsq)
+        cost[q][i] = cost[q - 1][optimal_split - 1] + dissim(optimal_split, i)
         splits[q][i] = optimal_split
 
         ((optimal_split_index + 1)...js.size).each do |split_index|
@@ -211,7 +210,7 @@ module Ckmeans
           next if jabs < splits[q - 1][i]
           break if jabs > i
 
-          sj = cost[q - 1][jabs - 1] + dissim(jabs, i, xsum, xsumsq)
+          sj = cost[q - 1][jabs - 1] + dissim(jabs, i)
 
           next unless sj <= cost[q][i]
 
@@ -222,7 +221,7 @@ module Ckmeans
       end
     end
 
-    def prune_candidates(imin, imax, istep, q, js, xsum, xsumsq)
+    def prune_candidates(imin, imax, istep, q, js)
       n = ((imax - imin) / istep) + 1
       m = js.size
 
@@ -237,8 +236,8 @@ module Ckmeans
         i     = imin + (p * istep)
         j     = pruned[right]
         jnext = pruned[right + 1]
-        sl    = cost[q - 1][j - 1] + dissim(j, i, xsum, xsumsq)
-        snext = cost[q - 1][jnext - 1] + dissim(jnext, i, xsum, xsumsq)
+        sl    = cost[q - 1][j - 1] + dissim(j, i)
+        snext = cost[q - 1][jnext - 1] + dissim(jnext, i)
 
         if (sl < snext) && (p < n - 1)
           left += 1
@@ -269,7 +268,7 @@ module Ckmeans
       pruned
     end
 
-    def fill_even_positions(imin, imax, istep, q, js, xsum, xsumsq)
+    def fill_even_positions(imin, imax, istep, q, js)
       n = js.size
       istepx2 = istep * 2
       jl = js[0]
@@ -279,11 +278,11 @@ module Ckmeans
       while i <= imax
         r += 1 while js[r] < jl
 
-        cost[q][i] = cost[q - 1][js[r] - 1] + dissim(js[r], i, xsum, xsumsq)
+        cost[q][i] = cost[q - 1][js[r] - 1] + dissim(js[r], i)
         splits[q][i] = js[r]
         jh         = ((i + istep) <= imax ? splits[q][i + istep] : js[n - 1]).to_i
         jmax       = [jh, i].min.to_i
-        sjimin     = dissim(jmax, i, xsum, xsumsq)
+        sjimin     = dissim(jmax, i)
 
         r += 1
         while r < n && js[r] <= jmax
@@ -296,7 +295,7 @@ module Ckmeans
             next
           end
 
-          s  = dissim(jabs, i, xsum, xsumsq)
+          s  = dissim(jabs, i)
           sj = cost[q - 1][jabs - 1] + s
 
           if sj <= cost[q][i]
