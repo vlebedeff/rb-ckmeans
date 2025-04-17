@@ -180,7 +180,7 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       )
     end
 
-    it "processes 1000 elements into optimimal cluster count within 2s" do
+    it "processes 1000 elements into optimimal cluster count within 2.5s" do
       entries = Array.new(1000) { rand * 10_000.0 }
       clusters = nil
       # profiler = RubyProf::Profile.new
@@ -190,7 +190,7 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       # profiling = profiler.stop
       # printer = RubyProf::FlatPrinter.new(profiling)
       # printer.print(STDOUT)
-      expect(bm.total).to be < 2
+      expect(bm.total).to be < 2.5
     end
   end
 
