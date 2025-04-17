@@ -8,30 +8,30 @@ VALUE rb_return_nil(VALUE self);
 VALUE rb_xsorted_cluster_index(VALUE self);
 
 typedef struct Arena {
-    size_t   capacity;
-    size_t   offset;
+    int64_t capacity;
+    int64_t offset;
     uint8_t *buffer;
 } Arena;
 
 typedef struct MatrixF {
-    size_t ncols;
-    size_t nrows;
+    int64_t ncols;
+    int64_t nrows;
     long double *values;
 } MatrixF;
 
 typedef struct MatrixI {
-    size_t ncols;
-    size_t nrows;
+    int64_t ncols;
+    int64_t nrows;
     int64_t *values;
 } MatrixI;
 
 typedef struct VectorF {
-    size_t nvalues;
+    int64_t nvalues;
     long double *values;
 } VectorF;
 
 typedef struct VectorI {
-    size_t nvalues;
+    int64_t nvalues;
     int64_t *values;
 } VectorI;
 
@@ -43,6 +43,7 @@ typedef struct State {
     VectorF *xsumsq;
 } State;
 
+/* TODO: validate these are all non negative */
 typedef struct RowParams {
     int64_t row;
     int64_t imin;
@@ -51,26 +52,26 @@ typedef struct RowParams {
 } RowParams;
 
 Arena       *arena_create(uint64_t);
-void        *arena_alloc(Arena*, size_t);
+void        *arena_alloc(Arena*, int64_t);
 void         arena_rewind(Arena*);
 void         arena_destroy(Arena*);
 
-MatrixF     *matrix_create_f(Arena*, size_t, size_t);
-MatrixI     *matrix_create_i(Arena*, size_t, size_t);
-void         matrix_set_f(MatrixF*, size_t, size_t, long double value);
-long double  matrix_get_f(MatrixF*, size_t, size_t);
-void         matrix_set_i(MatrixI*, size_t, size_t, int64_t value);
+MatrixF     *matrix_create_f(Arena*, int64_t, int64_t);
+MatrixI     *matrix_create_i(Arena*, int64_t, int64_t);
+void         matrix_set_f(MatrixF*, int64_t, int64_t, long double value);
+long double  matrix_get_f(MatrixF*, int64_t, int64_t);
+void         matrix_set_i(MatrixI*, int64_t, int64_t, int64_t value);
 
-VectorF     *vector_create_f(Arena*, size_t);
-void         vector_set_f(VectorF*, size_t offset, long double value);
-long double  vector_get_f(VectorF*, size_t offset);
-long double  vector_get_diff_f(VectorF*, size_t, size_t);
-VectorI     *vector_create_i(Arena*, size_t);
+VectorF     *vector_create_f(Arena*, int64_t);
+void         vector_set_f(VectorF*, int64_t offset, long double value);
+long double  vector_get_f(VectorF*, int64_t offset);
+long double  vector_get_diff_f(VectorF*, int64_t, int64_t);
+VectorI     *vector_create_i(Arena*, int64_t);
 VectorI     *vector_dup_i(VectorI*, Arena*);
-void         vector_set_i(VectorI*, size_t offset, int64_t value);
-int64_t      vector_get_i(VectorI*, size_t offset);
-int64_t      vector_get_diff_i(VectorI*, size_t, size_t);
-void         vector_downsize_i(VectorI*, size_t);
+void         vector_set_i(VectorI*, int64_t offset, int64_t value);
+int64_t      vector_get_i(VectorI*, int64_t offset);
+int64_t      vector_get_diff_i(VectorI*, int64_t, int64_t);
+void         vector_downsize_i(VectorI*, int64_t);
 
 long double  dissimilarity(int64_t, int64_t, VectorF*, VectorF*);
 void         fill_row(State, int64_t, int64_t, int64_t);
@@ -119,16 +120,16 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         printf("XSORTED[%llu]: %Lf\n", i, vector_get_f(xsorted, i));
     }
 
-    int64_t shift = vector_get_f(xsorted, xcount / 2);
+    int64_t shift            = vector_get_f(xsorted, xcount / 2);
     long double diff_initial = vector_get_f(xsorted, 0) - shift;
     vector_set_f(xsum, 0, diff_initial);
     vector_set_f(xsumsq, 0, diff_initial * diff_initial);
 
     for (int64_t i = 1; i < xcount; i++) {
-        long double xi = vector_get_f(xsorted, i);
-        long double xsum_prev = vector_get_f(xsum, i - 1);
+        long double xi          = vector_get_f(xsorted, i);
+        long double xsum_prev   = vector_get_f(xsum, i - 1);
         long double xsumsq_prev = vector_get_f(xsumsq, i - 1);
-        long double diff = xi - shift;
+        long double diff        = xi - shift;
 
         vector_set_f(xsum, i, xsum_prev + diff);
         vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
@@ -179,7 +180,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         matrix_set_f(state.cost, rparams.row, i, cost_prev + added_cost);
         matrix_set_i(state.splits, rparams.row, i, optimal_split);
 
-        for (size_t r = optimal_split_idx + 1; r < split_candidates->nvalues; r++)
+        for (int64_t r = optimal_split_idx + 1; r < split_candidates->nvalues; r++)
         {
             int64_t split = vector_get_i(split_candidates, r);
 
@@ -205,8 +206,8 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
 
     if (n >= m) return split_candidates;
 
-    int64_t left = -1;
-    int64_t right = 0;
+    int64_t left    = -1;
+    int64_t right   = 0;
     VectorI *pruned = vector_dup_i(split_candidates, state.arena);
 
     while (m > n)
@@ -241,12 +242,14 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
         }
     }
 
-    for (size_t i = left + 1; i < m; i++, right++) {
+    for (int64_t i = left + 1; i < m; i++, right++) {
         /* TODO: extract `vector_setcpy_T` */
         vector_set_i(pruned, i, vector_get_i(pruned, right));
     }
 
-    return vector_downsize_i(pruned, m);
+    vector_downsize_i(pruned, m);
+
+    return pruned;
 }
 
 long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) {
@@ -257,32 +260,33 @@ long double dissimilarity(int64_t i, int64_t j, VectorF *xsum, VectorF *xsumsq) 
     if (j > 0) {
         /* TODO: looks more like `segment_delta` */
         long double segment_sum = vector_get_diff_f(xsum, i, j - 1);
-        int64_t segment_size = i - j + 1;
-        sji = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
+        int64_t segment_size    = i - j + 1;
+        sji                     = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
     } else {
-        long double xsumi = vector_get_f(xsum, i);
-        sji = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
+        long double xsumi       = vector_get_f(xsum, i);
+        sji                     = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
     }
 
     return (sji > 0) ? sji : 0.0;
 }
 
-VectorF *vector_create_f(Arena *arena, size_t nvalues) {
+VectorF *vector_create_f(Arena *arena, int64_t nvalues) {
     VectorF *v;
 
-    v = arena_alloc(arena, sizeof(*v));
-    v->values = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
+    /* TODO: use one allocation */
+    v          = arena_alloc(arena, sizeof(*v));
+    v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
     v->nvalues = nvalues;
 
     return v;
 }
 
-VectorI *vector_create_i(Arena *arena, size_t nvalues) {
+VectorI *vector_create_i(Arena *arena, int64_t nvalues) {
     VectorI *v;
 
     /* TODO: use one allocation */
-    v = arena_alloc(arena, sizeof(*v));
-    v->values = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
+    v          = arena_alloc(arena, sizeof(*v));
+    v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
     v->nvalues = nvalues;
 
     return v;
@@ -293,94 +297,96 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
     VectorI *vdup = vector_create_i(arena, v->nvalues);
 
     /* TODO: use one memcpy call */
-    for (size_t i = 0; i < v->nvalues; i++) {
+    for (int64_t i = 0; i < v->nvalues; i++) {
         vector_set_i(vdup, i, vector_get_i(v, i));
     }
 
     return vdup;
 }
 
-void vector_set_f(VectorF *v, size_t offset, long double value) {
+void vector_set_f(VectorF *v, int64_t offset, long double value) {
     assert(offset < v->nvalues && "[vector_set_f] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
-void vector_set_i(VectorI *v, size_t offset, int64_t value) {
+void vector_set_i(VectorI *v, int64_t offset, int64_t value) {
     assert(offset < v->nvalues && "[vector_set_i] element index should be less than nvalues");
 
     *(v->values + offset) = value;
 }
 
-int64_t vector_get_i(VectorI *v, size_t offset) {
+int64_t vector_get_i(VectorI *v, int64_t offset) {
     assert(offset < v->nvalues && "[vector_get_i] element index should be less than nvalues");
 
     return *(v->values + offset);
 }
 
-int64_t vector_get_diff_i(VectorI *v, size_t i, size_t j) {
+int64_t vector_get_diff_i(VectorI *v, int64_t i, int64_t j) {
     assert(i < v->nvalues && "[vector_get_diff_i] i should be less than nvalues");
     assert(j < v->nvalues && "[vector_get_diff_i] j should be less than nvalues");
 
     return *(v->values + i) - *(v->values + j);
 }
 
-long double vector_get_f(VectorF *v, size_t offset) {
+long double vector_get_f(VectorF *v, int64_t offset) {
     assert(offset < v->nvalues && "[vector_get_f] element index should be less than nvalues");
 
     return *(v->values + offset);
 }
 
-long double vector_get_diff_f(VectorF *v, size_t i, size_t j) {
+long double vector_get_diff_f(VectorF *v, int64_t i, int64_t j) {
     assert(i < v->nvalues && "[vector_get_diff_f] i should be less than nvalues");
     assert(j < v->nvalues && "[vector_get_diff_f] j should be less than nvalues");
 
     return *(v->values + i) - *(v->values + j);
 }
 
-MatrixF *matrix_create_f(Arena *arena, size_t ncols, size_t nrows) {
+MatrixF *matrix_create_f(Arena *arena, int64_t ncols, int64_t nrows) {
     MatrixF *m;
 
-    m = arena_alloc(arena, sizeof(*m));
+    /* TODO: use one allocation */
+    m         = arena_alloc(arena, sizeof(*m));
     m->values = arena_alloc(arena, sizeof(*(m->values)) * ncols * nrows);
-    m->ncols = ncols;
-    m->nrows = nrows;
+    m->ncols  = ncols;
+    m->nrows  = nrows;
 
     return m;
 }
 
-MatrixI *matrix_create_i(Arena *arena, size_t ncols, size_t nrows) {
+MatrixI *matrix_create_i(Arena *arena, int64_t ncols, int64_t nrows) {
     MatrixI *m;
 
-    m = arena_alloc(arena, sizeof(*m));
+    /* TODO: use one allocation */
+    m         = arena_alloc(arena, sizeof(*m));
     m->values = arena_alloc(arena, sizeof(*(m->values)) * ncols * nrows);
-    m->ncols = ncols;
-    m->nrows = nrows;
+    m->ncols  = ncols;
+    m->nrows  = nrows;
 
     return m;
 }
 
-void matrix_set_f(MatrixF *m, size_t i, size_t j, long double value) {
+void matrix_set_f(MatrixF *m, int64_t i, int64_t j, long double value) {
     assert(i < m->nrows && "[matrix_set_f] row offset should be less than nrows");
     assert(j < m->cols &&  "[matrix_set_f] col offset should be less than ncols");
 
-    size_t offset = i * m->ncols + j;
+    int64_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
-long double matrix_get_f(MatrixF *m, size_t i, size_t j) {
+long double matrix_get_f(MatrixF *m, int64_t i, int64_t j) {
     assert(i < m->nrows && "[matrix_get_f] row offset should be less than nrows");
     assert(j < m->cols &&  "[matrix_get_f] col offset should be less than ncols");
 
-    size_t offset = i * m->ncols + j;
+    int64_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
 
-void matrix_set_i(MatrixI *m, size_t i, size_t j, int64_t value) {
+void matrix_set_i(MatrixI *m, int64_t i, int64_t j, int64_t value) {
     assert(i < m->nrows && "[matrix_set_i] row offset should be less than nrows");
     assert(j < m->cols &&  "[matrix_set_i] col offset should be less than ncols");
 
-    size_t offset = i * m->ncols + j;
+    int64_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
@@ -406,12 +412,12 @@ Arena *arena_create(uint64_t capacity) {
 
     arena->capacity = capacity;
     arena->offset = 0;
-    printf("[Arena Created] Capacity: %zu, offset: %zu\n", arena->capacity, arena->offset);
+    printf("[Arena Created] Capacity: %lld, offset: %lld\n", arena->capacity, arena->offset);
 
     return arena;
 }
 
-void *arena_alloc(Arena *arena, size_t size) {
+void *arena_alloc(Arena *arena, int64_t size) {
     size = (size + 7) & ~7;
 
     if (arena->offset + size > arena->capacity) {
@@ -425,7 +431,7 @@ void *arena_alloc(Arena *arena, size_t size) {
 }
 
 void arena_destroy(Arena *arena) {
-    printf("[Arena Destroy] Capacity: %zu, offset: %zu\n", arena->capacity, arena->offset);
+    printf("[Arena Destroy] Capacity: %lld, offset: %lld\n", arena->capacity, arena->offset);
     free(arena->buffer);
     free(arena);
 }

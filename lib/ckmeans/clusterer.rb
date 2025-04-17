@@ -185,7 +185,7 @@ module Ckmeans
       if (imax - imin) <= (0 * istep)
         find_min_from_candidates(q, imin, imax, istep, js, xsum, xsumsq)
       else
-        js_odd = js_reduced(imin, imax, istep, q, js, xsum, xsumsq)
+        js_odd = prune_candidates(imin, imax, istep, q, js, xsum, xsumsq)
         istepx2 = istep * 2
         imin_odd = imin + istep
         imax_odd = imin_odd + ((imax - imin_odd) / istepx2 * istepx2)
@@ -220,35 +220,35 @@ module Ckmeans
       end
     end
 
-    def js_reduced(imin, imax, istep, q, js, xsum, xsumsq)
+    def prune_candidates(imin, imax, istep, q, js, xsum, xsumsq)
       n = ((imax - imin) / istep) + 1
       m = js.size
 
       return js if n >= m
 
-      js_red = js.dup
+      pruned = js.dup
       left = -1
       right = 0
 
       while m > n
-        p = left + 1
-        i = imin + (p * istep)
-        j = js_red[right]
-        sl = smat[q - 1][j - 1] + dissim(j, i, xsum, xsumsq)
-        jplus1 = js_red[right + 1]
-        splus1 = smat[q - 1][jplus1 - 1] + dissim(jplus1, i, xsum, xsumsq)
+        p     = left + 1
+        i     = imin + (p * istep)
+        j     = pruned[right]
+        jnext = pruned[right + 1]
+        sl    = smat[q - 1][j - 1] + dissim(j, i, xsum, xsumsq)
+        snext = smat[q - 1][jnext - 1] + dissim(jnext, i, xsum, xsumsq)
 
-        if (sl < splus1) && (p < n - 1)
+        if (sl < snext) && (p < n - 1)
           left += 1
-          js_red[left] = j
+          pruned[left] = j
           right += 1
-        elsif (sl < splus1) && (p == n - 1)
+        elsif (sl < snext) && (p == n - 1)
           right += 1
-          js_red[right] = j
+          pruned[right] = j
           m -= 1
         else
           if p > 0
-            js_red[right] = js_red[left]
+            pruned[right] = pruned[left]
             left -= 1
           else
             right += 1
@@ -259,12 +259,12 @@ module Ckmeans
       end
 
       ((left + 1)...m).each do |r|
-        js_red[r] = js_red[right]
+        pruned[r] = pruned[right]
         right += 1
       end
 
-      js_red.slice!(m..-1) if js_red.size > m
-      js_red
+      pruned.slice!(m..-1) if pruned.size > m
+      pruned
     end
 
     def fill_even_positions(imin, imax, istep, q, js, smat, jmat, xsum, xsumsq)
