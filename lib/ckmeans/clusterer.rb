@@ -12,11 +12,11 @@ module Ckmeans
       raise ArgumentError, "Minimum cluster count is bigger than element count" if kmin > @xcount
       raise ArgumentError, "Maximum cluster count is bigger than element count" if kmax > @xcount
 
-      @kmin = kmin
+      @kmin          = kmin
       @unique_xcount = entries.uniq.size
-      @kmax = [@unique_xcount, kmax].min
-      @xsorted = entries.sort
-      @kestimate = kestimate
+      @kmax          = [@unique_xcount, kmax].min
+      @xsorted       = entries.sort
+      @kestimate     = kestimate
     end
 
     def clusters
@@ -70,22 +70,24 @@ module Ckmeans
 
       kmin.upto(kmax) do |k|
         sizes = Array.new(k)
+
         backtrack(k) { |q, left, right| sizes[q] = right - left + 1 }
-        index_left = 0
-        index_right = nil
+
+        index_left    = 0
+        index_right   = nil
         loglikelihood = 0.0
-        bin_left = nil
-        bin_right = nil
+        bin_left      = nil
+        bin_right     = nil
 
         k.times do |kb|
           num_points_in_bin = sizes[kb]
           index_right = index_left + num_points_in_bin - 1
 
           if xsorted[index_left] < xsorted[index_right]
-            bin_left = xsorted[index_left]
+            bin_left  = xsorted[index_left]
             bin_right = xsorted[index_right]
           elsif xsorted[index_left] == xsorted[index_right]
-            bin_left = index_left == 0 ? xsorted[0] : (xsorted[index_left - 1] + xsorted[index_left]) / 2.0
+            bin_left  = index_left == 0 ? xsorted[0] : (xsorted[index_left - 1] + xsorted[index_left]) / 2.0
             bin_right = index_right < n - 1 ? (xsorted[index_right] + xsorted[index_right + 1]) / 2.0 : xsorted[n - 1]
           else
             raise "ERROR: binLeft > binRight"
@@ -124,22 +126,22 @@ module Ckmeans
     end
 
     def shifted_data_variance(ileft, iright)
-      sum = 0.0
-      sumsq = 0.0
-      mean = 0.0
+      sum      = 0.0
+      sumsq    = 0.0
+      mean     = 0.0
       variance = 0.0
-      n = iright - ileft + 1
+      n        = iright - ileft + 1
 
       if iright >= ileft
         median = xsorted[(ileft + iright) / 2]
 
         ileft.upto(iright) do |i|
-          sumi = xsorted[i] - median
-          sum += sumi
+          sumi   = xsorted[i] - median
+          sum   += sumi
           sumsq += sumi**2
         end
 
-        mean = (sum / n) + median
+        mean     = (sum / n) + median
         variance = (sumsq - (sum * sum / n)) / (n - 1) if n > 1
       end
 
@@ -200,9 +202,9 @@ module Ckmeans
 
       (imin..imax).step(istep) do |i|
         optimal_split_index = optimal_split_index_prev
-        optimal_split = js[optimal_split_index]
-        cost[q][i] = cost[q - 1][optimal_split - 1] + dissim(optimal_split, i)
-        splits[q][i] = optimal_split
+        optimal_split       = js[optimal_split_index]
+        cost[q][i]          = cost[q - 1][optimal_split - 1] + dissim(optimal_split, i)
+        splits[q][i]        = optimal_split
 
         ((optimal_split_index + 1)...js.size).each do |split_index|
           jabs = js[split_index]
@@ -214,8 +216,8 @@ module Ckmeans
 
           next unless sj <= cost[q][i]
 
-          cost[q][i] = sj
-          splits[q][i] = js[split_index]
+          cost[q][i]          = sj
+          splits[q][i]        = js[split_index]
           optimal_split_index = split_index
         end
       end
@@ -278,11 +280,11 @@ module Ckmeans
       while i <= imax
         r += 1 while js[r] < jl
 
-        cost[q][i] = cost[q - 1][js[r] - 1] + dissim(js[r], i)
+        cost[q][i]   = cost[q - 1][js[r] - 1] + dissim(js[r], i)
         splits[q][i] = js[r]
-        jh         = ((i + istep) <= imax ? splits[q][i + istep] : js[n - 1]).to_i
-        jmax       = [jh, i].min.to_i
-        sjimin     = dissim(jmax, i)
+        jh           = ((i + istep) <= imax ? splits[q][i + istep] : js[n - 1]).to_i
+        jmax         = [jh, i].min.to_i
+        sjimin       = dissim(jmax, i)
 
         r += 1
         while r < n && js[r] <= jmax
@@ -299,7 +301,7 @@ module Ckmeans
           sj = cost[q - 1][jabs - 1] + s
 
           if sj <= cost[q][i]
-            cost[q][i] = sj
+            cost[q][i]   = sj
             splits[q][i] = js[r]
           elsif cost[q - 1][jabs - 1] + sjimin > cost[q][i]
             break
