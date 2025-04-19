@@ -186,7 +186,11 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       # profiler = RubyProf::Profile.new
       # profiler.start
       bm = Benchmark.measure { clusters = described_class.new(entries, 1, 1000, :sensitive).clusters }
+      puts bm.total
+
+      # bm = Benchmark.measure { clusters = described_class.new(entries, 1, 1000, :sensitive).xsorted_cluster_index }
       # puts bm.total
+
       # profiling = profiler.stop
       # printer = RubyProf::FlatPrinter.new(profiling)
       # printer.print(STDOUT)
@@ -201,7 +205,9 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
     end
 
     specify do
-      clusterer = described_class.new([100, 100, 100, 99_999, 100_000], 1, 5)
+      clusterer = described_class.new([-1, 2, -1, 2, 4, 5, 6, -1, 2, -1], 3)
+      expect(clusterer.clusters).to eq([[-1, -1, -1, -1], [2, 2, 2], [4, 5, 6]])
+      puts "--------------- C OUTPUT STARTS ------"
       expect(clusterer.xsorted_cluster_index).to be_nil
     end
   end
