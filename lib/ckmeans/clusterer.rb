@@ -30,21 +30,26 @@ module Ckmeans
           @xsumsq = Array.new(xcount)
 
           shift     = xsorted[xcount / 2]
-          xsum[0]   = xsorted[0] - shift
+          xsum[0]   = xsorted[0].to_f - shift
           xsumsq[0] = xsum[0]**2
 
           1.upto(xcount - 1) do |i|
-            xsum[i]      = xsum[i - 1] + xsorted[i] - shift
-            xsumsq[i]    = xsumsq[i - 1] + ((xsorted[i] - shift) * (xsorted[i] - shift))
+            xf = xsorted[i].to_f
+            xsum[i]      = xsum[i - 1] + xf - shift
+            xsumsq[i]    = xsumsq[i - 1] + ((xf - shift) * (xf - shift))
             cost[0][i]   = dissim(0, i)
             splits[0][i] = 0
           end
+
 
           kmax_idx = kmax - 1
           1.upto(kmax_idx) do |q|
             imin = q < kmax_idx ? [1, q].max : xcount - 1
             fill_row(q, imin, xcount - 1)
           end
+
+          # puts "FINAL COST\n", cost.map(&:inspect)
+          # puts "FINAL SPLITS\n", splits.map(&:inspect)
 
           kopt = koptimal
 
@@ -93,7 +98,7 @@ module Ckmeans
             raise "ERROR: binLeft > binRight"
           end
 
-          bin_width = bin_right - bin_left
+          bin_width = bin_right.to_f - bin_left
 
           mean, variance = shifted_data_variance(index_left, index_right)
 
@@ -189,6 +194,7 @@ module Ckmeans
         find_min_from_candidates(q, imin, imax, istep, js)
       else
         js_odd = prune_candidates(imin, imax, istep, q, js)
+        # puts "Pruned: #{js_odd.inspect}"
         istepx2 = istep * 2
         imin_odd = imin + istep
         imax_odd = imin_odd + ((imax - imin_odd) / istepx2 * istepx2)
@@ -216,9 +222,9 @@ module Ckmeans
 
           next unless sj <= cost[q][i]
 
-          cost[q][i]          = sj
-          splits[q][i]        = js[split_index]
-          optimal_split_index = split_index
+          cost[q][i]               = sj
+          splits[q][i]             = js[split_index]
+          optimal_split_index_prev = split_index
         end
       end
     end
@@ -282,8 +288,8 @@ module Ckmeans
 
         cost[q][i]   = cost[q - 1][js[r] - 1] + dissim(js[r], i)
         splits[q][i] = js[r]
-        jh           = ((i + istep) <= imax ? splits[q][i + istep] : js[n - 1]).to_i
-        jmax         = [jh, i].min.to_i
+        jh           = (i + istep) <= imax ? splits[q][i + istep] : js[n - 1]
+        jmax         = [jh, i].min
         sjimin       = dissim(jmax, i)
 
         r += 1
@@ -297,13 +303,13 @@ module Ckmeans
             next
           end
 
-          s  = dissim(jabs, i)
-          sj = cost[q - 1][jabs - 1] + s
+          cost_base = cost[q - 1][jabs - 1]
+          sj        = cost_base + dissim(jabs, i)
 
           if sj <= cost[q][i]
             cost[q][i]   = sj
-            splits[q][i] = js[r]
-          elsif cost[q - 1][jabs - 1] + sjimin > cost[q][i]
+            splits[q][i] = jabs
+          elsif cost_base + sjimin > cost[q][i]
             break
           end
 
