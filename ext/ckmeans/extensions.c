@@ -127,8 +127,9 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
 
     /* printf("XSORTED \t"); vector_inspect_f(xsorted); */
 
-    long double shift            = vector_get_f(xsorted, xcount / 2);
+    long double shift        = vector_get_f(xsorted, xcount / 2);
     long double diff_initial = vector_get_f(xsorted, 0) - shift;
+
     vector_set_f(xsum, 0, diff_initial);
     vector_set_f(xsumsq, 0, diff_initial * diff_initial);
 
@@ -149,8 +150,8 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         fill_row(state, q, imin, xcount - 1);
     }
 
-    /* printf("FINAL COST\n"); matrix_inspect_f(cost); */
-    /* printf("FINAL SPLITS\n"); matrix_inspect_i(splits); */
+    printf("FINAL COST\n"); matrix_inspect_f(cost);
+    printf("FINAL SPLITS\n"); matrix_inspect_i(splits);
 
     arena_destroy(arena);
 
@@ -168,16 +169,20 @@ void fill_row(State state, int64_t q, int64_t imin, int64_t imax) {
 }
 
 void smawk(State state, RowParams rparams, VectorI *split_candidates) {
-    if ((rparams.imax - rparams.imin) <= (0 * rparams.istep)) {
+    const int64_t imin  = rparams.imin;
+    const int64_t imax  = rparams.imax;
+    const int64_t istep = rparams.istep;
+
+    if ((imax - imin) <= (0 * istep)) {
         find_min_from_candidates(state, rparams, split_candidates);
     } else {
-        VectorI *odd_candidates        = prune_candidates(state, rparams, split_candidates);
 
+        VectorI *odd_candidates = prune_candidates(state, rparams, split_candidates);
         /* printf("PRUNED\t"); vector_inspect_i(odd_candidates); */
-        int64_t istepx2                = rparams.istep * 2;
-        int64_t imin_odd               = rparams.imin + rparams.istep;
-        int64_t imax_odd               = imin_odd + ((rparams.imax - imin_odd) / istepx2 * istepx2);
-        RowParams rparams_odd          = { .row = rparams.row, .imin = imin_odd, .imax = imax_odd, .istep = istepx2 };
+        int64_t istepx2         = istep * 2;
+        int64_t imin_odd        = imin + istep;
+        int64_t imax_odd        = imin_odd + ((imax - imin_odd) / istepx2 * istepx2);
+        RowParams rparams_odd   = { .row = rparams.row, .imin = imin_odd, .imax = imax_odd, .istep = istepx2 };
 
         smawk(state, rparams_odd, odd_candidates);
         fill_even_positions(state, rparams, split_candidates);
@@ -238,36 +243,39 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
 
 void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    int64_t row = rparams.row;
-    int64_t imin = rparams.imin;
-    int64_t imax = rparams.imax;
-    int64_t istep = rparams.istep;
+    const int64_t row     = rparams.row;
+    const int64_t imin    = rparams.imin;
+    const int64_t imax    = rparams.imax;
+    const int64_t istep   = rparams.istep;
+    MatrixF *const cost   = state.cost;
+    MatrixI *const splits = state.splits;
+
     int64_t optimal_split_idx_prev = 0;
 
     for (int64_t i = imin; i <= imax; i += istep)
     {
-        int64_t optimal_split_idx   = optimal_split_idx_prev;
-        int64_t optimal_split       = vector_get_i(split_candidates, optimal_split_idx);
-        int64_t cost_prev           = matrix_get_f(state.cost, row - 1, optimal_split - 1);
-        long double added_cost      = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
+        const int64_t optimal_split_idx = optimal_split_idx_prev;
+        const int64_t optimal_split     = vector_get_i(split_candidates, optimal_split_idx);
+        const int64_t cost_prev         = matrix_get_f(cost, row - 1, optimal_split - 1);
+        const long double added_cost    = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
 
-        matrix_set_f(state.cost, row, i, cost_prev + added_cost);
-        matrix_set_i(state.splits, row, i, optimal_split);
+        matrix_set_f(cost, row, i, cost_prev + added_cost);
+        matrix_set_i(splits, row, i, optimal_split);
 
         for (int64_t r = optimal_split_idx + 1; r < split_candidates->nvalues; r++)
         {
             int64_t split = vector_get_i(split_candidates, r);
 
-            if (split < matrix_get_i(state.splits, row - 1, i)) continue;
+            if (split < matrix_get_i(splits, row - 1, i)) continue;
             if (split > i) break;
 
             long double split_cost =
-                matrix_get_f(state.cost, row - 1, split - 1) + dissimilarity(split, i, state.xsum, state.xsumsq);
+                matrix_get_f(cost, row - 1, split - 1) + dissimilarity(split, i, state.xsum, state.xsumsq);
 
-            if (split_cost > matrix_get_f(state.cost, row, i)) continue;
+            if (split_cost > matrix_get_f(cost, row, i)) continue;
 
-            matrix_set_f(state.cost, row, i, split_cost);
-            matrix_set_i(state.splits, row, i, split);
+            matrix_set_f(cost, row, i, split_cost);
+            matrix_set_i(splits, row, i, split);
             optimal_split_idx_prev = r;
         }
     }
@@ -337,8 +345,8 @@ long double dissimilarity(int64_t j, int64_t i, VectorF *xsum, VectorF *xsumsq) 
         int64_t segment_size    = i - j + 1;
         sji                     = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
     } else {
-        long double xsumi       = vector_get_f(xsum, i);
-        sji                     = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
+        long double xsumi = vector_get_f(xsum, i);
+        sji               = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
     }
 
     return (sji > 0) ? sji : 0.0;
@@ -347,7 +355,6 @@ long double dissimilarity(int64_t j, int64_t i, VectorF *xsum, VectorF *xsumsq) 
 VectorF *vector_create_f(Arena *arena, int64_t nvalues) {
     VectorF *v;
 
-    /* TODO: use one allocation */
     v          = arena_alloc(arena, sizeof(*v));
     v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
     v->nvalues = nvalues;
@@ -358,7 +365,6 @@ VectorF *vector_create_f(Arena *arena, int64_t nvalues) {
 VectorI *vector_create_i(Arena *arena, int64_t nvalues) {
     VectorI *v;
 
-    /* TODO: use one allocation */
     v          = arena_alloc(arena, sizeof(*v));
     v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
     v->nvalues = nvalues;
@@ -516,21 +522,22 @@ Arena *arena_create(uint64_t capacity) {
 
     Arena *arena;
 
-    arena = malloc(sizeof(*arena));
-    if (!arena) {
+    arena        = malloc(sizeof(*arena));
+    void *buffer = calloc(1, capacity);
+
+    if (!arena || !buffer) {
         printf("Failed to allocate arena\n");
+
+        if (arena) free(arena);
+        if (buffer) free(buffer);
+
         return NULL;
     }
 
-    arena->buffer = calloc(1, capacity);
-    if (!arena->buffer) {
-        printf("Failed to allocate buffer\n");
-        free(arena);
-        return NULL;
-    }
-
+    arena->buffer   = buffer;
     arena->capacity = capacity;
-    arena->offset = 0;
+    arena->offset   = 0;
+
     printf("[Arena Created] Capacity: %lld, offset: %lld\n", arena->capacity, arena->offset);
 
     return arena;
