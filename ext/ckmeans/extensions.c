@@ -97,7 +97,7 @@ VALUE rb_return_nil(VALUE self) {
     return Qnil;
 }
 
-# define ALLOCATION_FACTOR 50
+# define ALLOCATION_FACTOR 100
 
 VALUE rb_xsorted_cluster_index(VALUE self) {
     VALUE rb_xcount  = rb_ivar_get(self, rb_intern("@xcount"));
