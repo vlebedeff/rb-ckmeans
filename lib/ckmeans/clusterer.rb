@@ -41,7 +41,6 @@ module Ckmeans
             splits[0][i] = 0
           end
 
-
           kmax_idx = kmax - 1
           1.upto(kmax_idx) do |q|
             imin = q < kmax_idx ? [1, q].max : xcount - 1
@@ -65,7 +64,7 @@ module Ckmeans
 
     attr_reader :cost, :splits, :xsum, :xsumsq
 
-    def koptimal
+    def koptimal # rubocop:disable Metrics/AbcSize
       kopt = kmin
       n = xcount
       max_bic = 0.0
