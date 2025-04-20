@@ -36,6 +36,7 @@ typedef struct VectorI {
 } VectorI;
 
 typedef struct State {
+    int64_t xcount;
     Arena   *arena;
     MatrixF *cost;
     MatrixI *splits;
@@ -90,6 +91,7 @@ void         find_min_from_candidates(State, RowParams, VectorI*);
 VectorI     *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, int64_t, int64_t);
+VectorI     *backtrack_sizes(State, int64_t);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -124,7 +126,14 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     VectorF *xsorted = vector_create_f(arena, xcount);
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
-    State    state   = { .arena = arena, .cost = cost, .splits = splits, .xsum = xsum, .xsumsq = xsumsq };
+    State    state   = {
+        .arena  = arena,
+        .xcount = xcount,
+        .cost   = cost,
+        .splits = splits,
+        .xsum   = xsum,
+        .xsumsq = xsumsq
+    };
 
     for (int64_t i = 0; i < xcount; i++) {
         long double xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
@@ -162,6 +171,22 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     arena_destroy(arena);
 
     return Qnil;
+}
+
+VectorI *backtrack_sizes(State state, int64_t k)
+{
+    int64_t xcount  = state.xcount;
+    MatrixI *splits = state.splits;
+    VectorI *sizes  = vector_create_i(state.arena, k);
+
+    for (int64_t i = k - 1, right = xcount - 1, left = 0; i >= 0; i--) {
+        left = matrix_get_i(splits, i, right);
+
+        vector_set_i(sizes, i, right - left + 1);
+
+        if (i > 0) right = left - 1;
+    }
+    return sizes;
 }
 
 SegmentStats shifted_data_variance(VectorF *xsorted, int64_t left, int64_t right)
