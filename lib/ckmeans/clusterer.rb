@@ -153,9 +153,8 @@ module Ckmeans
     end
 
     def backtrack(k)
-      n = splits[0].size
-      right = n - 1
-      left = nil
+      right = xcount - 1
+      left  = nil
 
       (k - 1).downto(0) do |q|
         left = splits[q][right]
