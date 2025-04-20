@@ -51,6 +51,11 @@ typedef struct RowParams {
     int64_t istep;
 } RowParams;
 
+typedef struct {
+    long double mean;
+    long double variance;
+} SegmentStats;
+
 Arena       *arena_create(uint64_t);
 void        *arena_alloc(Arena*, int64_t);
 void         arena_rewind(Arena*);
@@ -84,6 +89,7 @@ void         smawk(State, RowParams, VectorI*);
 void         find_min_from_candidates(State, RowParams, VectorI*);
 VectorI     *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
+SegmentStats shifted_data_variance(VectorF*, int64_t, int64_t);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -156,6 +162,32 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     arena_destroy(arena);
 
     return Qnil;
+}
+
+SegmentStats shifted_data_variance(VectorF *xsorted, int64_t left, int64_t right)
+{
+    const int64_t n    = right - left + 1;
+    long double sum    = 0.0;
+    long double sumsq  = 0.0;
+    SegmentStats stats = { .mean = 0.0, .variance = 0.0 };
+
+    if (right >= left) {
+        const long double median = vector_get_f(xsorted, (left + right) / 2);
+
+        for (int64_t i = left; i <= right; i++) {
+            const long double sumi = vector_get_f(xsorted, i) - median;
+
+            sum   += sumi;
+            sumsq += sumi * sumi;
+        }
+
+        stats.mean = (sum / n) + median;
+        if (n > 1) {
+            stats.variance = (sumsq - (sum * sum / n)) / (n - 1);
+        }
+    }
+
+    return stats;
 }
 
 void fill_row(State state, int64_t q, int64_t imin, int64_t imax) {
