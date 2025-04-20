@@ -47,8 +47,8 @@ module Ckmeans
             fill_row(q, imin, xcount - 1)
           end
 
-          puts "FINAL COST\n", cost.map(&:inspect)
-          puts "FINAL SPLITS\n", splits.map(&:inspect)
+          # puts "FINAL COST\n", cost.map(&:inspect)
+          # puts "FINAL SPLITS\n", splits.map(&:inspect)
 
           kopt = koptimal
 
