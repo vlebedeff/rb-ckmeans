@@ -52,11 +52,9 @@ module Ckmeans
 
           kopt = koptimal
 
-          results = []
-          backtrack(kopt) do |q, left, right|
-            results[q] = xsorted[left..right]
+          backtrack(kopt).each_with_object(Array.new(kopt)) do |(q, left, right), res|
+            res[q] = xsorted[left..right]
           end
-          results
         end
     end
 
@@ -64,18 +62,14 @@ module Ckmeans
 
     attr_reader :cost, :splits, :xsum, :xsumsq
 
-    def koptimal # rubocop:disable Metrics/AbcSize
-      kopt = kmin
-      n = xcount
-      max_bic = 0.0
-
-      # Deviation from BIC formula to favor smaller clusters
-      adjustment = kestimate == :sensitive ? 0.0 : 1.0
+    def koptimal # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      kopt       = kmin
+      n          = xcount
+      max_bic    = 0.0
+      adjustment = kestimate == :sensitive ? 0.0 : 1.0 # Deviation from BIC formula to favor smaller clusters
 
       kmin.upto(kmax) do |k|
-        sizes = Array.new(k)
-
-        backtrack(k) { |q, left, right| sizes[q] = right - left + 1 }
+        sizes = backtrack(k).each_with_object(Array.new(k)) { |(q, left, right), sz| sz[q] = right - left + 1 }
 
         index_left    = 0
         index_right   = nil
@@ -119,10 +113,10 @@ module Ckmeans
 
         if k == kmin
           max_bic = bic
-          kopt = kmin
+          kopt    = kmin
         elsif bic > max_bic
           max_bic = bic
-          kopt = k
+          kopt    = k
         end
       end
 
@@ -153,6 +147,8 @@ module Ckmeans
     end
 
     def backtrack(k)
+      return to_enum(__method__, k) unless block_given?
+
       right = xcount - 1
       left  = nil
 
