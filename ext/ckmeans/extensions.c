@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
+#include <math.h>
 #include "ruby.h"
-
-#define ARENA_MIN_CAPACITY 1024
 
 VALUE rb_return_nil(VALUE self);
 VALUE rb_xsorted_cluster_index(VALUE self);
@@ -37,7 +36,10 @@ typedef struct VectorI {
 
 typedef struct State {
     int64_t xcount;
+    int64_t kmin;
+    int64_t kmax;
     Arena   *arena;
+    VectorF *xsorted;
     MatrixF *cost;
     MatrixI *splits;
     VectorF *xsum;
@@ -92,6 +94,7 @@ VectorI     *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, int64_t, int64_t);
 VectorI     *backtrack_sizes(State, int64_t);
+int64_t      find_koptimal(State);
 
 void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -105,17 +108,19 @@ VALUE rb_return_nil(VALUE self) {
     return Qnil;
 }
 
-# define ALLOCATION_FACTOR 100
+# define ARENA_MIN_CAPACITY 1024
+# define ALLOCATION_FACTOR 30
+# define PIx2 (M_PI * 2.0)
 
 VALUE rb_xsorted_cluster_index(VALUE self) {
     VALUE rb_xcount  = rb_ivar_get(self, rb_intern("@xcount"));
-    /* VALUE rb_kmin    = rb_ivar_get(self, rb_intern("@kmin")); */
+    VALUE rb_kmin    = rb_ivar_get(self, rb_intern("@kmin"));
     VALUE rb_kmax    = rb_ivar_get(self, rb_intern("@kmax"));
     VALUE rb_xsorted = rb_ivar_get(self, rb_intern("@xsorted"));
     int64_t xcount   = NUM2LL(rb_xcount);
-    /* int64_t kmin    = NUM2LL(rb_kmin); */
+    int64_t kmin     = NUM2LL(rb_kmin);
     int64_t kmax     = NUM2LL(rb_kmax);
-    Arena *arena     = arena_create(xcount * kmax * ALLOCATION_FACTOR);
+    Arena *arena     = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
     if (arena == NULL) {
         return Qnil;
@@ -126,21 +131,24 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
     VectorF *xsorted = vector_create_f(arena, xcount);
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
-    State    state   = {
-        .arena  = arena,
-        .xcount = xcount,
-        .cost   = cost,
-        .splits = splits,
-        .xsum   = xsum,
-        .xsumsq = xsumsq
-    };
 
     for (int64_t i = 0; i < xcount; i++) {
         long double xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
         vector_set_f(xsorted, i, xi);
     }
 
-    /* printf("XSORTED \t"); vector_inspect_f(xsorted); */
+    State state = {
+        .arena   = arena,
+        .xcount  = xcount,
+        .kmin    = kmin,
+        .kmax    = kmax,
+        .xsorted = xsorted,
+        .cost    = cost,
+        .splits  = splits,
+        .xsum    = xsum,
+        .xsumsq  = xsumsq
+    };
+
 
     long double shift        = vector_get_f(xsorted, xcount / 2);
     long double diff_initial = vector_get_f(xsorted, 0) - shift;
@@ -165,12 +173,83 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         fill_row(state, q, imin, xcount - 1);
     }
 
+    int64_t koptimal = find_koptimal(state);
+
+    printf("XSORTED \t"); vector_inspect_f(xsorted);
+    printf("K OPTIMAL: %lld\n", koptimal);
     printf("FINAL COST\n"); matrix_inspect_f(cost);
     printf("FINAL SPLITS\n"); matrix_inspect_i(splits);
 
     arena_destroy(arena);
 
     return Qnil;
+}
+
+int64_t find_koptimal(State state)
+{
+    int64_t kmin           = state.kmin;
+    int64_t kmax           = state.kmax;
+    int64_t xcount         = state.xcount;
+    int64_t kopt           = kmin;
+    int64_t xindex_max     = state.xcount - 1;
+    VectorF *xsorted       = state.xsorted;
+    long double x0         = vector_get_f(xsorted, 0);
+    long double xn         = vector_get_f(xsorted, xindex_max);
+    long double max_bic    = 0.0;
+    long double adjustment = 1.0;
+
+    for (int64_t k = kmin; k <= kmax; k++) {
+        int64_t index_right, index_left = 0;
+        long double bin_left, bin_right, loglikelihood = 0.0;
+        VectorI *sizes = backtrack_sizes(state, k);
+
+        for (int64_t kb = 0; kb < k; kb++) {
+            int64_t npoints    = vector_get_i(sizes, kb);
+            index_right        = index_left + npoints - 1;
+            long double xleft  = vector_get_f(xsorted, index_left);
+            long double xright = vector_get_f(xsorted, index_right);
+
+            if (xleft < xright) {
+                bin_left  = xleft;
+                bin_right = xright;
+            } else if (xleft == xright) {
+                bin_left  = index_left == 0 ? x0 : (vector_get_f(xsorted, index_left - 1) + xleft) / 2;
+                bin_right = index_right < xindex_max ? (xright + vector_get_f(xsorted, index_right + 1)) / 2 : xn;
+            }
+
+            long double bin_width = bin_right - bin_left;
+            SegmentStats stats    = shifted_data_variance(xsorted, index_left, index_right);
+            long double mean      = stats.mean;
+            long double variance  = stats.variance;
+
+            if (variance > 0) {
+                for (int64_t i = index_left; i <= index_right; i++) {
+                    long double xi = vector_get_f(xsorted, i);
+                    loglikelihood += -(xi - mean) * (xi - mean) / (2.0 * variance);
+                }
+                loglikelihood += npoints * (
+                    (log(npoints / (long double) xcount) * adjustment) -
+                    (0.5 * log(PIx2 * variance))
+                );
+            } else {
+                loglikelihood += npoints * log(1.0 / bin_width / xcount);
+            }
+
+            index_left = index_right + 1;
+        }
+
+        long double bic = (2.0 * loglikelihood) - (((3 * k) - 1) * log((long double) xcount));
+
+        if (k == kmin) {
+            max_bic = bic;
+            kopt = kmin;
+        } else if (bic > max_bic) {
+            max_bic = bic;
+            kopt = k;
+        }
+    }
+
+    return kopt;
 }
 
 VectorI *backtrack_sizes(State state, int64_t k)
@@ -233,7 +312,6 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates) {
     if ((imax - imin) <= (0 * istep)) {
         find_min_from_candidates(state, rparams, split_candidates);
     } else {
-
         VectorI *odd_candidates = prune_candidates(state, rparams, split_candidates);
         /* printf("PRUNED\t"); vector_inspect_i(odd_candidates); */
         int64_t istepx2         = istep * 2;
@@ -271,7 +349,11 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
         matrix_set_f(state.cost, row, i, cost);
         matrix_set_i(state.splits, row, i, rcandidate);
 
-        int64_t jh         = (i + istep) <= imax ? matrix_get_i(splits, row, i + istep) : vector_get_i(split_candidates, n - 1);
+        int64_t jh         =
+            (i + istep) <= imax
+            ? matrix_get_i(splits, row, i + istep)
+            : vector_get_i(split_candidates, n - 1);
+
         int64_t jmax       = jh < i ? jh : i;
         long double sjimin = dissimilarity(jmax, i, xsum, xsumsq);
 
@@ -471,9 +553,8 @@ void vector_downsize_i(VectorI *v, int64_t new_size) {
 }
 
 void vector_inspect_i(VectorI *v) {
-    for (int64_t i = 0; i < v->nvalues - 1; i++) {
+    for (int64_t i = 0; i < v->nvalues - 1; i++)
         printf("%lld, ", vector_get_i(v, i));
-    }
     printf("%lld\n", vector_get_i(v, v->nvalues - 1));
 }
 
@@ -491,16 +572,14 @@ long double vector_get_diff_f(VectorF *v, int64_t i, int64_t j) {
 }
 
 void vector_inspect_f(VectorF *v) {
-    for (int64_t i = 0; i < v->nvalues - 1; i++) {
+    for (int64_t i = 0; i < v->nvalues - 1; i++)
         printf("%Lf, ", vector_get_f(v, i));
-    }
     printf("%Lf\n", vector_get_f(v, v->nvalues - 1));
 }
 
 MatrixF *matrix_create_f(Arena *arena, int64_t nrows, int64_t ncols) {
     MatrixF *m;
 
-    /* TODO: use one allocation */
     m         = arena_alloc(arena, sizeof(*m));
     m->values = arena_alloc(arena, sizeof(*(m->values)) * ncols * nrows);
     m->ncols  = ncols;
@@ -512,7 +591,6 @@ MatrixF *matrix_create_f(Arena *arena, int64_t nrows, int64_t ncols) {
 MatrixI *matrix_create_i(Arena *arena, int64_t nrows, int64_t ncols) {
     MatrixI *m;
 
-    /* TODO: use one allocation */
     m         = arena_alloc(arena, sizeof(*m));
     m->values = arena_alloc(arena, sizeof(*(m->values)) * ncols * nrows);
     m->ncols  = ncols;
@@ -579,19 +657,19 @@ Arena *arena_create(uint64_t capacity) {
 
     Arena *arena;
 
-    arena        = malloc(sizeof(*arena));
-    void *buffer = calloc(1, capacity);
-
-    if (!arena || !buffer) {
+    arena = malloc(sizeof(*arena));
+    if (!arena) {
         printf("Failed to allocate arena\n");
-
-        if (arena) free(arena);
-        if (buffer) free(buffer);
-
         return NULL;
     }
 
-    arena->buffer   = buffer;
+    arena->buffer = calloc(1, capacity);
+    if (!arena->buffer) {
+        printf("Failed to allocate arena\n");
+        free(arena);
+        return NULL;
+    }
+
     arena->capacity = capacity;
     arena->offset   = 0;
 
@@ -604,6 +682,7 @@ void *arena_alloc(Arena *arena, int64_t size) {
     size = (size + 7) & ~7;
 
     if (arena->offset + size > arena->capacity) {
+        printf("Arena Out Of Memory\n");
         return NULL;
     }
 
