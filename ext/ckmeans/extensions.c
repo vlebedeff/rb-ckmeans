@@ -126,6 +126,7 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
     MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
     VectorF *xsorted = vector_create_f(arena, xcount);
+    /* TODO: pack sums into one vector of pairs */
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
 
@@ -135,16 +136,16 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     }
 
     State state = {
-        .arena   = arena,
-        .xcount  = xcount,
-        .kmin    = kmin,
-        .kmax    = kmax,
+        .arena           = arena,
+        .xcount          = xcount,
+        .kmin            = kmin,
+        .kmax            = kmax,
         .apply_deviation = apply_deviation,
-        .xsorted = xsorted,
-        .cost    = cost,
-        .splits  = splits,
-        .xsum    = xsum,
-        .xsumsq  = xsumsq
+        .xsorted         = xsorted,
+        .cost            = cost,
+        .splits          = splits,
+        .xsum            = xsum,
+        .xsumsq          = xsumsq
     };
 
 
