@@ -104,20 +104,20 @@ void Init_extensions(void) {
 }
 
 # define ARENA_MIN_CAPACITY 1024
-# define ALLOCATION_FACTOR 30
+# define ALLOCATION_FACTOR 20
 # define PIx2 (M_PI * 2.0)
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
-    VALUE rb_xcount  = rb_ivar_get(self, rb_intern("@xcount"));
-    VALUE rb_kmin    = rb_ivar_get(self, rb_intern("@kmin"));
-    VALUE rb_kmax    = rb_ivar_get(self, rb_intern("@kmax"));
-    VALUE rb_xsorted = rb_ivar_get(self, rb_intern("@xsorted"));
+    VALUE rb_xcount              = rb_ivar_get(self, rb_intern("@xcount"));
+    VALUE rb_kmin                = rb_ivar_get(self, rb_intern("@kmin"));
+    VALUE rb_kmax                = rb_ivar_get(self, rb_intern("@kmax"));
+    VALUE rb_xsorted             = rb_ivar_get(self, rb_intern("@xsorted"));
     VALUE rb_apply_bic_deviation = rb_ivar_get(self, rb_intern("@apply_bic_deviation"));
-    int64_t xcount   = NUM2LL(rb_xcount);
-    int64_t kmin     = NUM2LL(rb_kmin);
-    int64_t kmax     = NUM2LL(rb_kmax);
-    bool apply_deviation = RTEST(rb_apply_bic_deviation);
-    Arena *arena     = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
+    int64_t xcount               = NUM2LL(rb_xcount);
+    int64_t kmin                 = NUM2LL(rb_kmin);
+    int64_t kmax                 = NUM2LL(rb_kmax);
+    bool apply_deviation         = RTEST(rb_apply_bic_deviation);
+    Arena *arena                 = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
     if (arena == NULL) {
         return Qnil;
