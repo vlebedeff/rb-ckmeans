@@ -2,7 +2,6 @@
 
 module Ckmeans
   class Clusterer # rubocop:disable Style/Documentation, Metrics/ClassLength
-
     PI_DOUBLE = Math::PI * 2
 
     def initialize(entries, kmin, kmax = kmin, kestimate = :regular)
