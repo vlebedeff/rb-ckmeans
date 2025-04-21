@@ -8,8 +8,4 @@ RSpec.describe Ckmeans do
   it "does something useful" do
     expect(true).to eq(true)
   end
-
-  specify do
-    expect(Ckmeans.c_do_nothing).to eq(nil)
-  end
 end

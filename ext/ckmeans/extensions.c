@@ -3,9 +3,6 @@
 #include <math.h>
 #include "ruby.h"
 
-VALUE rb_return_nil(VALUE self);
-VALUE rb_xsorted_cluster_index(VALUE self);
-
 typedef struct Arena {
     int64_t capacity;
     int64_t offset;
@@ -38,6 +35,7 @@ typedef struct State {
     int64_t xcount;
     int64_t kmin;
     int64_t kmax;
+    bool    apply_deviation;
     Arena   *arena;
     VectorF *xsorted;
     MatrixF *cost;
@@ -58,6 +56,8 @@ typedef struct {
     long double mean;
     long double variance;
 } SegmentStats;
+
+VALUE        rb_ckmeans_sorted_group_sizes(VALUE self);
 
 Arena       *arena_create(uint64_t);
 void        *arena_alloc(Arena*, int64_t);
@@ -100,26 +100,23 @@ void Init_extensions(void) {
     VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
     VALUE clusterer_class = rb_const_get(ckmeans_module, rb_intern("Clusterer"));
 
-    rb_define_singleton_method(ckmeans_module, "c_do_nothing", rb_return_nil, 0);
-    rb_define_method(clusterer_class, "xsorted_cluster_index", rb_xsorted_cluster_index, 0);
-}
-
-VALUE rb_return_nil(VALUE self) {
-    return Qnil;
+    rb_define_private_method(clusterer_class, "sorted_group_sizes", rb_ckmeans_sorted_group_sizes, 0);
 }
 
 # define ARENA_MIN_CAPACITY 1024
 # define ALLOCATION_FACTOR 30
 # define PIx2 (M_PI * 2.0)
 
-VALUE rb_xsorted_cluster_index(VALUE self) {
+VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     VALUE rb_xcount  = rb_ivar_get(self, rb_intern("@xcount"));
     VALUE rb_kmin    = rb_ivar_get(self, rb_intern("@kmin"));
     VALUE rb_kmax    = rb_ivar_get(self, rb_intern("@kmax"));
     VALUE rb_xsorted = rb_ivar_get(self, rb_intern("@xsorted"));
+    VALUE rb_apply_bic_deviation = rb_ivar_get(self, rb_intern("@apply_bic_deviation"));
     int64_t xcount   = NUM2LL(rb_xcount);
     int64_t kmin     = NUM2LL(rb_kmin);
     int64_t kmax     = NUM2LL(rb_kmax);
+    bool apply_deviation = RTEST(rb_apply_bic_deviation);
     Arena *arena     = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
     if (arena == NULL) {
@@ -142,6 +139,7 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
         .xcount  = xcount,
         .kmin    = kmin,
         .kmax    = kmax,
+        .apply_deviation = apply_deviation,
         .xsorted = xsorted,
         .cost    = cost,
         .splits  = splits,
@@ -175,14 +173,23 @@ VALUE rb_xsorted_cluster_index(VALUE self) {
 
     int64_t koptimal = find_koptimal(state);
 
-    printf("XSORTED \t"); vector_inspect_f(xsorted);
-    printf("K OPTIMAL: %lld\n", koptimal);
-    printf("FINAL COST\n"); matrix_inspect_f(cost);
-    printf("FINAL SPLITS\n"); matrix_inspect_i(splits);
+    VectorI *sizes = backtrack_sizes(state, koptimal);
+
+    /* printf("XSORTED \t"); vector_inspect_f(xsorted); */
+    /* printf("K OPTIMAL: %lld\n", koptimal); */
+    /* printf("SIZES \t"); vector_inspect_i(sizes); */
+    /* printf("FINAL COST\n"); matrix_inspect_f(cost); */
+    /* printf("FINAL SPLITS\n"); matrix_inspect_i(splits); */
+
+    VALUE response = rb_ary_new2(sizes->nvalues);
+    for (int64_t i = 0; i < sizes->nvalues; i++) {
+        VALUE size = LONG2NUM(vector_get_i(sizes, i));
+        rb_ary_store(response, i, size);
+    }
 
     arena_destroy(arena);
 
-    return Qnil;
+    return response;
 }
 
 int64_t find_koptimal(State state)
@@ -196,7 +203,7 @@ int64_t find_koptimal(State state)
     long double x0         = vector_get_f(xsorted, 0);
     long double xn         = vector_get_f(xsorted, xindex_max);
     long double max_bic    = 0.0;
-    long double adjustment = 1.0;
+    long double adjustment = state.apply_deviation ? 0.0 : 1.0;
 
     for (int64_t k = kmin; k <= kmax; k++) {
         int64_t index_right, index_left = 0;

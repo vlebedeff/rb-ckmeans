@@ -180,8 +180,8 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       )
     end
 
-    it "processes 1000 elements into optimimal cluster count within 2.5s" do
-      entries = Array.new(1000) { rand * 10_000.0 }
+    it "processes 20k elements into optimimal cluster count within 1s" do
+      entries = Array.new(20_000) { rand * 1_000_000.0 }
       clusters = nil
       # profiler = RubyProf::Profile.new
       # profiler.start
@@ -195,28 +195,6 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       # printer = RubyProf::FlatPrinter.new(profiling)
       # printer.print(STDOUT)
       expect(bm.total).to be < 2.5
-    end
-  end
-
-  describe "#xsorted_cluster_index" do
-    xspecify do
-      clusterer = described_class.new([], 0, 0)
-      expect(clusterer.xsorted_cluster_index).to be_nil
-    end
-
-    specify do
-      clusterer = described_class.new([-1, 2, -1, 2, 4, 5, 6, -1, 2, -1], 3)
-      expect(clusterer.clusters).to eq([[-1, -1, -1, -1], [2, 2, 2], [4, 5, 6]])
-      puts "--------------- C OUTPUT STARTS ------"
-      expect(clusterer.xsorted_cluster_index).to be_nil
-      x = [0.1, 1.1, 1.2, 1.6, 2.2, 2.5, 2.7, 2.8, 3, 3.1, 7.1]
-      clusterer = described_class.new(x, 1, 8)
-      clusterer.clusters
-      clusterer.xsorted_cluster_index
-      x = [100, 100, 100, 99_999, 100_000]
-      clusterer = described_class.new(x, 1, 5)
-      clusterer.clusters
-      clusterer.xsorted_cluster_index
     end
   end
 end

@@ -2,7 +2,6 @@
 
 module Ckmeans
   class Clusterer # rubocop:disable Style/Documentation, Metrics/ClassLength
-    attr_reader :xcount, :xsorted, :kmin, :kmax, :kestimate
 
     PI_DOUBLE = Math::PI * 2
 
@@ -12,18 +11,24 @@ module Ckmeans
       raise ArgumentError, "Minimum cluster count is bigger than element count" if kmin > @xcount
       raise ArgumentError, "Maximum cluster count is bigger than element count" if kmax > @xcount
 
-      @kmin          = kmin
-      @unique_xcount = entries.uniq.size
-      @kmax          = [@unique_xcount, kmax].min
-      @xsorted       = entries.sort
-      @kestimate     = kestimate
+      @kmin                = kmin
+      @unique_xcount       = entries.uniq.size
+      @kmax                = [@unique_xcount, kmax].min
+      @xsorted_original    = entries.sort
+      @xsorted             = @xsorted_original.map(&:to_f)
+      @apply_bic_deviation = kestimate == :sensitive
     end
 
     def clusters
       @clusters ||=
         if @unique_xcount <= 1
-          [xsorted]
+          [@xsorted_original]
         else
+          sorted_group_sizes.each_with_object([]) do |size, groups|
+            groups << @xsorted_original.shift(size)
+          end
+
+=begin # rubocop:disable Style/BlockComments
           @cost   = Array.new(kmax) { Array.new(xcount) { 0.0 } }
           @splits = Array.new(kmax) { Array.new(xcount) { 0 } }
           @xsum   = Array.new(xcount)
@@ -47,20 +52,22 @@ module Ckmeans
             fill_row(q, imin, xcount - 1)
           end
 
-          # puts "FINAL COST\n", cost.map(&:inspect)
-          # puts "FINAL SPLITS\n", splits.map(&:inspect)
-
           kopt = koptimal
+
+          puts "RB COST\n", cost.map(&:inspect)
+          puts "RB SPLITS\n", splits.map(&:inspect)
+          puts "RB K OPTIMAL: #{kopt}"
 
           backtrack(kopt).each_with_object(Array.new(kopt)) do |(q, left, right), res|
             res[q] = xsorted[left..right]
           end
+=end
         end
     end
 
     private
 
-    attr_reader :cost, :splits, :xsum, :xsumsq
+    attr_reader :cost, :splits, :xsum, :xsumsq, :xcount, :xsorted, :kmin, :kmax
 
     def koptimal # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       kopt       = kmin
@@ -131,7 +138,7 @@ module Ckmeans
       n        = iright - ileft + 1
 
       if iright >= ileft
-        median = xsorted[(ileft + iright) / 2]
+        median = xsorted[(ileft + iright) / 2].to_f
 
         ileft.upto(iright) do |i|
           sumi   = xsorted[i] - median
