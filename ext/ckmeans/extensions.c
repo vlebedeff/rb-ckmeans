@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <string.h>
 #include "ruby.h"
 
 typedef struct Arena {
@@ -527,10 +528,7 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
 {
     VectorI *vdup = vector_create_i(arena, v->nvalues);
 
-    /* TODO: use one memcpy call */
-    for (uint32_t i = 0; i < v->nvalues; i++) {
-        vector_set_i(vdup, i, vector_get_i(v, i));
-    }
+    memcpy(vdup->values, v->values, sizeof(*(v->values)) * v->nvalues);
 
     return vdup;
 }
