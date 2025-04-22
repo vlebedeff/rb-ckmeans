@@ -678,7 +678,7 @@ Arena *arena_create(uint32_t capacity) {
     arena->capacity = capacity;
     arena->offset   = 0;
 
-    printf("[Arena Created] Capacity: %u, offset: %u\n", arena->capacity, arena->offset);
+    /* printf("[Arena Created] Capacity: %u, offset: %u\n", arena->capacity, arena->offset); */
 
     return arena;
 }
@@ -698,7 +698,7 @@ void *arena_alloc(Arena *arena, uint32_t size) {
 }
 
 void arena_destroy(Arena *arena) {
-    printf("[Arena Destroy] Capacity: %u, offset: %u, left: %u\n", arena->capacity, arena->offset, arena->capacity - arena->offset);
+    /* printf("[Arena Destroy] Capacity: %u, offset: %u, left: %u\n", arena->capacity, arena->offset, arena->capacity - arena->offset); */
     free(arena->buffer);
     free(arena);
 }
