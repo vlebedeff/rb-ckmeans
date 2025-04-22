@@ -211,17 +211,20 @@ uint32_t find_koptimal(State state)
         VectorI *sizes = backtrack_sizes(state, k);
 
         for (uint32_t kb = 0; kb < k; kb++) {
-            uint32_t npoints    = vector_get_i(sizes, kb);
+            uint32_t npoints   = vector_get_i(sizes, kb);
             index_right        = index_left + npoints - 1;
             long double xleft  = vector_get_f(xsorted, index_left);
             long double xright = vector_get_f(xsorted, index_right);
+            bin_left           = xleft;
+            bin_right          = xright;
 
-            if (xleft < xright) {
-                bin_left  = xleft;
-                bin_right = xright;
-            } else if (xleft == xright) {
-                bin_left  = index_left == 0 ? x0 : (vector_get_f(xsorted, index_left - 1) + xleft) / 2;
-                bin_right = index_right < xindex_max ? (xright + vector_get_f(xsorted, index_right + 1)) / 2 : xn;
+            if (xleft == xright) {
+                bin_left  = index_left == 0
+                    ? x0
+                    : (vector_get_f(xsorted, index_left - 1) + xleft) / 2;
+                bin_right = index_right < xindex_max
+                    ? (xright + vector_get_f(xsorted, index_right + 1)) / 2
+                    : xn;
             }
 
             long double bin_width = bin_right - bin_left;
