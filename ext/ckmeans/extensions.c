@@ -439,8 +439,8 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
 
     if (n >= m) return split_candidates;
 
-    uint32_t left    = -1;
-    uint32_t right   = 0;
+    int32_t left    = -1;
+    uint32_t right  = 0;
     VectorI *pruned = vector_dup_i(split_candidates, state.arena);
 
     while (m > n)
