@@ -44,7 +44,6 @@ typedef struct State {
     VectorF *xsumsq;
 } State;
 
-/* TODO: validate these are all non negative */
 typedef struct RowParams {
     uint32_t row;
     uint32_t imin;
