@@ -118,9 +118,7 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     bool apply_deviation         = RTEST(rb_apply_bic_deviation);
     Arena *arena                 = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
-    if (arena == NULL) {
-        return Qnil;
-    }
+    if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
 
     MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
     MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
@@ -685,7 +683,7 @@ void *arena_alloc(Arena *arena, uint32_t size) {
     size = (size + 7) & ~7;
 
     if (arena->offset + size > arena->capacity) {
-        printf("Arena Out Of Memory\n");
+        rb_raise(rb_eNoMemError, "Arena Insufficient Capacity");
         return NULL;
     }
 
