@@ -22,12 +22,12 @@ typedef struct MatrixI {
 } MatrixI;
 
 typedef struct VectorF {
-    uint32_t nvalues;
+    uint32_t size;
     long double *values;
 } VectorF;
 
 typedef struct VectorI {
-    uint32_t nvalues;
+    uint32_t size;
     uint32_t *values;
 } VectorI;
 
@@ -176,8 +176,8 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     /* printf("FINAL COST\n"); matrix_inspect_f(cost); */
     /* printf("FINAL SPLITS\n"); matrix_inspect_i(splits); */
 
-    VALUE response = rb_ary_new2(sizes->nvalues);
-    for (uint32_t i = 0; i < sizes->nvalues; i++) {
+    VALUE response = rb_ary_new2(sizes->size);
+    for (uint32_t i = 0; i < sizes->size; i++) {
         VALUE size = LONG2NUM(vector_get_i(sizes, i));
         rb_ary_store(response, i, size);
     }
@@ -341,7 +341,7 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     uint32_t imin    = rparams.imin;
     uint32_t imax    = rparams.imax;
     uint32_t istep   = rparams.istep;
-    uint32_t n       = split_candidates->nvalues;
+    uint32_t n       = split_candidates->size;
     uint32_t istepx2 = istep * 2;
     uint32_t jl      = vector_get_i(split_candidates, 0);
     VectorF *xsum    = state.xsum;
@@ -351,22 +351,22 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     for (uint32_t i = imin, r = 0; i <= imax; i += istepx2) {
         while (vector_get_i(split_candidates, r) < jl) r++;
 
-        uint32_t rcandidate     = vector_get_i(split_candidates, r);
+        uint32_t rcandidate    = vector_get_i(split_candidates, r);
         uint32_t cost_base_row = row - 1;
         uint32_t cost_base_col = rcandidate - 1;
-        long double cost      =
+        long double cost       =
             matrix_get_f(state.cost, cost_base_row, cost_base_col) + dissimilarity(rcandidate, i, xsum, xsumsq);
 
         matrix_set_f(state.cost, row, i, cost);
         matrix_set_i(state.splits, row, i, rcandidate);
 
         uint32_t jh         =
-            (i + istep) <= imax
+            (i + istep)    <= imax
             ? matrix_get_i(splits, row, i + istep)
             : vector_get_i(split_candidates, n - 1);
 
         uint32_t jmax       = jh < i ? jh : i;
-        long double sjimin = dissimilarity(jmax, i, xsum, xsumsq);
+        long double sjimin  = dissimilarity(jmax, i, xsum, xsumsq);
 
         for (++r; r < n && vector_get_i(split_candidates, r) <= jmax; r++) {
             uint32_t jabs = vector_get_i(split_candidates, r);
@@ -412,7 +412,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         matrix_set_f(cost, row, i, cost_prev + added_cost);
         matrix_set_i(splits, row, i, optimal_split);
 
-        for (uint32_t r = optimal_split_idx + 1; r < split_candidates->nvalues; r++)
+        for (uint32_t r = optimal_split_idx + 1; r < split_candidates->size; r++)
         {
             uint32_t split = vector_get_i(split_candidates, r);
 
@@ -437,7 +437,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     uint32_t row   = rparams.row;
     uint32_t istep = rparams.istep;
     uint32_t n     = ((rparams.imax - imin) / istep) + 1;
-    uint32_t m     = split_candidates->nvalues;
+    uint32_t m     = split_candidates->size;
 
     if (n >= m) return split_candidates;
 
@@ -500,31 +500,31 @@ long double dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq
     return (sji > 0) ? sji : 0.0;
 }
 
-VectorF *vector_create_f(Arena *arena, uint32_t nvalues) {
+VectorF *vector_create_f(Arena *arena, uint32_t size) {
     VectorF *v;
 
-    v          = arena_alloc(arena, sizeof(*v));
-    v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
-    v->nvalues = nvalues;
+    v         = arena_alloc(arena, sizeof(*v));
+    v->values = arena_alloc(arena, sizeof(*(v->values)) * size);
+    v->size   = size;
 
     return v;
 }
 
-VectorI *vector_create_i(Arena *arena, uint32_t nvalues) {
+VectorI *vector_create_i(Arena *arena, uint32_t size) {
     VectorI *v;
 
-    v          = arena_alloc(arena, sizeof(*v));
-    v->values  = arena_alloc(arena, sizeof(*(v->values)) * nvalues);
-    v->nvalues = nvalues;
+    v         = arena_alloc(arena, sizeof(*v));
+    v->values = arena_alloc(arena, sizeof(*(v->values)) * size);
+    v->size   = size;
 
     return v;
 }
 
 VectorI *vector_dup_i(VectorI *v, Arena *arena)
 {
-    VectorI *vdup = vector_create_i(arena, v->nvalues);
+    VectorI *vdup = vector_create_i(arena, v->size);
 
-    memcpy(vdup->values, v->values, sizeof(*(v->values)) * v->nvalues);
+    memcpy(vdup->values, v->values, sizeof(*(v->values)) * v->size);
 
     return vdup;
 }
@@ -542,13 +542,13 @@ uint32_t vector_get_i(VectorI *v, uint32_t offset) {
 }
 
 void vector_downsize_i(VectorI *v, uint32_t new_size) {
-    v->nvalues = new_size;
+    v->size = new_size;
 }
 
 void vector_inspect_i(VectorI *v) {
-    for (uint32_t i = 0; i < v->nvalues - 1; i++)
+    for (uint32_t i = 0; i < v->size - 1; i++)
         printf("%u, ", vector_get_i(v, i));
-    printf("%u\n", vector_get_i(v, v->nvalues - 1));
+    printf("%u\n", vector_get_i(v, v->size - 1));
 }
 
 long double vector_get_f(VectorF *v, uint32_t offset) {
@@ -560,9 +560,9 @@ long double vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
 }
 
 void vector_inspect_f(VectorF *v) {
-    for (uint32_t i = 0; i < v->nvalues - 1; i++)
+    for (uint32_t i = 0; i < v->size - 1; i++)
         printf("%Lf, ", vector_get_f(v, i));
-    printf("%Lf\n", vector_get_f(v, v->nvalues - 1));
+    printf("%Lf\n", vector_get_f(v, v->size - 1));
 }
 
 MatrixF *matrix_create_f(Arena *arena, uint32_t nrows, uint32_t ncols) {
