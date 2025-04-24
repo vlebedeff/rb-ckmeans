@@ -60,7 +60,6 @@ VALUE        rb_ckmeans_sorted_group_sizes(VALUE self);
 
 Arena       *arena_create(uint32_t);
 void        *arena_alloc(Arena*, uint32_t);
-void         arena_rewind(Arena*);
 void         arena_destroy(Arena*);
 
 MatrixF     *matrix_create_f(Arena*, uint32_t, uint32_t);
