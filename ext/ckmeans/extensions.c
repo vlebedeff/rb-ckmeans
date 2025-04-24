@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include <assert.h>
 #include <math.h>
+#include <string.h>
 #include "ruby.h"
 
 typedef struct Arena {
@@ -60,7 +60,6 @@ VALUE        rb_ckmeans_sorted_group_sizes(VALUE self);
 
 Arena       *arena_create(uint32_t);
 void        *arena_alloc(Arena*, uint32_t);
-void         arena_rewind(Arena*);
 void         arena_destroy(Arena*);
 
 MatrixF     *matrix_create_f(Arena*, uint32_t, uint32_t);
@@ -117,14 +116,11 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     bool apply_deviation         = RTEST(rb_apply_bic_deviation);
     Arena *arena                 = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
-    if (arena == NULL) {
-        return Qnil;
-    }
+    if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
 
     MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
     MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
     VectorF *xsorted = vector_create_f(arena, xcount);
-    /* TODO: pack sums into one vector of pairs */
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
 
@@ -193,11 +189,11 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
 
 uint32_t find_koptimal(State state)
 {
-    uint32_t kmin           = state.kmin;
-    uint32_t kmax           = state.kmax;
-    uint32_t xcount         = state.xcount;
-    uint32_t kopt           = kmin;
-    uint32_t xindex_max     = state.xcount - 1;
+    uint32_t kmin          = state.kmin;
+    uint32_t kmax          = state.kmax;
+    uint32_t xcount        = state.xcount;
+    uint32_t kopt          = kmin;
+    uint32_t xindex_max    = state.xcount - 1;
     VectorF *xsorted       = state.xsorted;
     long double x0         = vector_get_f(xsorted, 0);
     long double xn         = vector_get_f(xsorted, xindex_max);
@@ -274,6 +270,7 @@ VectorI *backtrack_sizes(State state, uint32_t k)
         left = matrix_get_i(splits, i, right);
         vector_set_i(sizes, i, right - left + 1);
     }
+    // Special case outside of the loop removing the need for conditionals
     left = matrix_get_i(splits, 0, right);
     vector_set_i(sizes, 0, right - left + 1);
 
@@ -282,7 +279,7 @@ VectorI *backtrack_sizes(State state, uint32_t k)
 
 SegmentStats shifted_data_variance(VectorF *xsorted, uint32_t left, uint32_t right)
 {
-    const uint32_t n    = right - left + 1;
+    const uint32_t n   = right - left + 1;
     long double sum    = 0.0;
     long double sumsq  = 0.0;
     SegmentStats stats = { .mean = 0.0, .variance = 0.0 };
@@ -306,7 +303,8 @@ SegmentStats shifted_data_variance(VectorF *xsorted, uint32_t left, uint32_t rig
     return stats;
 }
 
-void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax) {
+void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax)
+{
     uint32_t size = imax - q + 1;
     VectorI *split_candidates = vector_create_i(state.arena, size);
     for (uint32_t i = 0; i < size; i++) {
@@ -316,7 +314,8 @@ void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax) {
     smawk(state, rparams, split_candidates);
 }
 
-void smawk(State state, RowParams rparams, VectorI *split_candidates) {
+void smawk(State state, RowParams rparams, VectorI *split_candidates)
+{
     const uint32_t imin  = rparams.imin;
     const uint32_t imax  = rparams.imax;
     const uint32_t istep = rparams.istep;
@@ -326,9 +325,9 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates) {
     } else {
         VectorI *odd_candidates = prune_candidates(state, rparams, split_candidates);
         /* printf("PRUNED\t"); vector_inspect_i(odd_candidates); */
-        uint32_t istepx2         = istep * 2;
-        uint32_t imin_odd        = imin + istep;
-        uint32_t imax_odd        = imin_odd + ((imax - imin_odd) / istepx2 * istepx2);
+        uint32_t istepx2        = istep * 2;
+        uint32_t imin_odd       = imin + istep;
+        uint32_t imax_odd       = imin_odd + ((imax - imin_odd) / istepx2 * istepx2);
         RowParams rparams_odd   = { .row = rparams.row, .imin = imin_odd, .imax = imax_odd, .istep = istepx2 };
 
         smawk(state, rparams_odd, odd_candidates);
@@ -345,9 +344,9 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     uint32_t n       = split_candidates->nvalues;
     uint32_t istepx2 = istep * 2;
     uint32_t jl      = vector_get_i(split_candidates, 0);
-    VectorF *xsum   = state.xsum;
-    VectorF *xsumsq = state.xsumsq;
-    MatrixI *splits = state.splits;
+    VectorF *xsum    = state.xsum;
+    VectorF *xsumsq  = state.xsumsq;
+    MatrixI *splits  = state.splits;
 
     for (uint32_t i = imin, r = 0; i <= imax; i += istepx2) {
         while (vector_get_i(split_candidates, r) < jl) r++;
@@ -394,10 +393,10 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
 
 void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    const uint32_t row     = rparams.row;
-    const uint32_t imin    = rparams.imin;
-    const uint32_t imax    = rparams.imax;
-    const uint32_t istep   = rparams.istep;
+    const uint32_t row    = rparams.row;
+    const uint32_t imin   = rparams.imin;
+    const uint32_t imax   = rparams.imax;
+    const uint32_t istep  = rparams.istep;
     MatrixF *const cost   = state.cost;
     MatrixI *const splits = state.splits;
 
@@ -408,7 +407,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         const uint32_t optimal_split_idx = optimal_split_idx_prev;
         const uint32_t optimal_split     = vector_get_i(split_candidates, optimal_split_idx);
         const uint32_t cost_prev         = matrix_get_f(cost, row - 1, optimal_split - 1);
-        const long double added_cost    = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
+        const long double added_cost     = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
 
         matrix_set_f(cost, row, i, cost_prev + added_cost);
         matrix_set_i(splits, row, i, optimal_split);
@@ -434,39 +433,39 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
 
 VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    uint32_t n = ((rparams.imax - rparams.imin) / rparams.istep) + 1;
-    uint32_t m = split_candidates->nvalues;
+    uint32_t imin  = rparams.imin;
+    uint32_t row   = rparams.row;
+    uint32_t istep = rparams.istep;
+    uint32_t n     = ((rparams.imax - imin) / istep) + 1;
+    uint32_t m     = split_candidates->nvalues;
 
     if (n >= m) return split_candidates;
 
-    int32_t left    = -1;
+    uint32_t left   = 0;
     uint32_t right  = 0;
     VectorI *pruned = vector_dup_i(split_candidates, state.arena);
 
     while (m > n)
     {
-        uint32_t p         = left + 1;
-        uint32_t i         = rparams.imin + p * rparams.istep;
-        uint32_t j         = vector_get_i(pruned, right);
-        uint32_t jnext     = vector_get_i(pruned, right + 1);
+        uint32_t i        = imin + left * istep;
+        uint32_t j        = vector_get_i(pruned, right);
+        uint32_t jnext    = vector_get_i(pruned, right + 1);
         long double sl    =
-            matrix_get_f(state.cost, rparams.row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
         long double snext =
-            matrix_get_f(state.cost, rparams.row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
 
-        if ((sl < snext) && (p < n - 1)) {
+        if ((sl < snext) && (left < n - 1)) {
+            vector_set_i(pruned, left, j);
             left++;
             right++;
-            vector_set_i(pruned, left, j);
-        } else if ((sl < snext) && (p == n - 1)) {
+        } else if ((sl < snext) && (left == n - 1)) {
             right++;
             m--;
             vector_set_i(pruned, right, j);
         } else {
-            if (p > 0) {
-                /* TODO: extract `vector_setcpy_T` */
-                vector_set_i(pruned, right, vector_get_i(pruned, left));
-                left--;
+            if (left > 0) {
+                vector_set_i(pruned, right, vector_get_i(pruned, --left));
             } else {
                 right++;
             }
@@ -475,8 +474,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
         }
     }
 
-    for (uint32_t i = left + 1; i < m; i++) {
-        /* TODO: extract `vector_setcpy_T` */
+    for (uint32_t i = left; i < m; i++) {
         vector_set_i(pruned, i, vector_get_i(pruned, right++));
     }
 
@@ -491,10 +489,9 @@ long double dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq
     if (j >= i) return sji;
 
     if (j > 0) {
-        /* TODO: looks more like `segment_delta` */
-        long double segment_sum = vector_get_diff_f(xsum, i, j - 1);
+        long double segment_diff = vector_get_diff_f(xsum, i, j - 1);
         uint32_t segment_size    = i - j + 1;
-        sji                     = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
+        sji                      = vector_get_diff_f(xsumsq, i, j - 1) - (segment_diff * segment_diff / segment_size);
     } else {
         long double xsumi = vector_get_f(xsum, i);
         sji               = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
@@ -527,29 +524,20 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
 {
     VectorI *vdup = vector_create_i(arena, v->nvalues);
 
-    /* TODO: use one memcpy call */
-    for (uint32_t i = 0; i < v->nvalues; i++) {
-        vector_set_i(vdup, i, vector_get_i(v, i));
-    }
+    memcpy(vdup->values, v->values, sizeof(*(v->values)) * v->nvalues);
 
     return vdup;
 }
 
 void vector_set_f(VectorF *v, uint32_t offset, long double value) {
-    assert(offset < v->nvalues && "[vector_set_f] element index should be less than nvalues");
-
     *(v->values + offset) = value;
 }
 
 void vector_set_i(VectorI *v, uint32_t offset, uint32_t value) {
-    assert(offset < v->nvalues && "[vector_set_i] element index should be less than nvalues");
-
     *(v->values + offset) = value;
 }
 
 uint32_t vector_get_i(VectorI *v, uint32_t offset) {
-    assert(offset < v->nvalues && "[vector_get_i] element index should be less than nvalues");
-
     return *(v->values + offset);
 }
 
@@ -564,15 +552,10 @@ void vector_inspect_i(VectorI *v) {
 }
 
 long double vector_get_f(VectorF *v, uint32_t offset) {
-    assert(offset < v->nvalues && "[vector_get_f] element index should be less than nvalues");
-
     return *(v->values + offset);
 }
 
 long double vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
-    assert(i < v->nvalues && "[vector_get_diff_f] i should be less than nvalues");
-    assert(j < v->nvalues && "[vector_get_diff_f] j should be less than nvalues");
-
     return *(v->values + i) - *(v->values + j);
 }
 
@@ -605,17 +588,11 @@ MatrixI *matrix_create_i(Arena *arena, uint32_t nrows, uint32_t ncols) {
 }
 
 void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, long double value) {
-    assert(i < m->nrows && "[matrix_set_f] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_set_f] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
 long double matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
-    assert(i < m->nrows && "[matrix_get_f] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_get_f] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
@@ -640,17 +617,11 @@ void matrix_inspect_i(MatrixI *m) {
 }
 
 void matrix_set_i(MatrixI *m, uint32_t i, uint32_t j, uint32_t value) {
-    assert(i < m->nrows && "[matrix_set_i] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_set_i] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
 uint32_t matrix_get_i(MatrixI *m, uint32_t i, uint32_t j) {
-    assert(i < m->nrows && "[matrix_get_i] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_get_i] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
@@ -687,7 +658,7 @@ void *arena_alloc(Arena *arena, uint32_t size) {
     size = (size + 7) & ~7;
 
     if (arena->offset + size > arena->capacity) {
-        printf("Arena Out Of Memory\n");
+        rb_raise(rb_eNoMemError, "Arena Insufficient Capacity");
         return NULL;
     }
 
