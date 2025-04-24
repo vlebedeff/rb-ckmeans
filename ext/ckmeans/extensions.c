@@ -431,39 +431,39 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
 
 VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    uint32_t n = ((rparams.imax - rparams.imin) / rparams.istep) + 1;
-    uint32_t m = split_candidates->nvalues;
+    uint32_t imin  = rparams.imin;
+    uint32_t row   = rparams.row;
+    uint32_t istep = rparams.istep;
+    uint32_t n     = ((rparams.imax - imin) / istep) + 1;
+    uint32_t m     = split_candidates->nvalues;
 
     if (n >= m) return split_candidates;
 
-    int32_t left    = -1;
+    uint32_t left   = 0;
     uint32_t right  = 0;
     VectorI *pruned = vector_dup_i(split_candidates, state.arena);
 
     while (m > n)
     {
-        uint32_t p         = left + 1;
-        uint32_t i         = rparams.imin + p * rparams.istep;
-        uint32_t j         = vector_get_i(pruned, right);
-        uint32_t jnext     = vector_get_i(pruned, right + 1);
+        uint32_t i        = imin + left * istep;
+        uint32_t j        = vector_get_i(pruned, right);
+        uint32_t jnext    = vector_get_i(pruned, right + 1);
         long double sl    =
-            matrix_get_f(state.cost, rparams.row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
         long double snext =
-            matrix_get_f(state.cost, rparams.row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
 
-        if ((sl < snext) && (p < n - 1)) {
+        if ((sl < snext) && (left < n - 1)) {
+            vector_set_i(pruned, left, j);
             left++;
             right++;
-            vector_set_i(pruned, left, j);
-        } else if ((sl < snext) && (p == n - 1)) {
+        } else if ((sl < snext) && (left == n - 1)) {
             right++;
             m--;
             vector_set_i(pruned, right, j);
         } else {
-            if (p > 0) {
-                /* TODO: extract `vector_setcpy_T` */
-                vector_set_i(pruned, right, vector_get_i(pruned, left));
-                left--;
+            if (left > 0) {
+                vector_set_i(pruned, right, vector_get_i(pruned, --left));
             } else {
                 right++;
             }
@@ -472,8 +472,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
         }
     }
 
-    for (uint32_t i = left + 1; i < m; i++) {
-        /* TODO: extract `vector_setcpy_T` */
+    for (uint32_t i = left; i < m; i++) {
         vector_set_i(pruned, i, vector_get_i(pruned, right++));
     }
 
