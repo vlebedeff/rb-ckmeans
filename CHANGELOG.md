@@ -1,6 +1,6 @@
 ## [Unreleased]
 
-## [1.0.0] - 2025-04-24
+## [1.0.1] - 2025-04-24
 
 - https://github.com/vlebedeff/rb-ckmeans/pull/9
 - https://github.com/vlebedeff/rb-ckmeans/pull/8
