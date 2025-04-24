@@ -122,7 +122,6 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
     MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
     VectorF *xsorted = vector_create_f(arena, xcount);
-    /* TODO: pack sums into one vector of pairs */
     VectorF *xsum    = vector_create_f(arena, xcount);
     VectorF *xsumsq  = vector_create_f(arena, xcount);
 
@@ -272,6 +271,7 @@ VectorI *backtrack_sizes(State state, uint32_t k)
         left = matrix_get_i(splits, i, right);
         vector_set_i(sizes, i, right - left + 1);
     }
+    // Special case outside of the loop removing the need for conditionals
     left = matrix_get_i(splits, 0, right);
     vector_set_i(sizes, 0, right - left + 1);
 
@@ -489,10 +489,9 @@ long double dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq
     if (j >= i) return sji;
 
     if (j > 0) {
-        /* TODO: looks more like `segment_delta` */
-        long double segment_sum = vector_get_diff_f(xsum, i, j - 1);
+        long double segment_diff = vector_get_diff_f(xsum, i, j - 1);
         uint32_t segment_size    = i - j + 1;
-        sji                     = vector_get_diff_f(xsumsq, i, j - 1) - (segment_sum * segment_sum / segment_size);
+        sji                      = vector_get_diff_f(xsumsq, i, j - 1) - (segment_diff * segment_diff / segment_size);
     } else {
         long double xsumi = vector_get_f(xsum, i);
         sji               = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
