@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <assert.h>
 #include <math.h>
 #include <string.h>
 #include "ruby.h"
@@ -532,20 +531,14 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
 }
 
 void vector_set_f(VectorF *v, uint32_t offset, long double value) {
-    assert(offset < v->nvalues && "[vector_set_f] element index should be less than nvalues");
-
     *(v->values + offset) = value;
 }
 
 void vector_set_i(VectorI *v, uint32_t offset, uint32_t value) {
-    assert(offset < v->nvalues && "[vector_set_i] element index should be less than nvalues");
-
     *(v->values + offset) = value;
 }
 
 uint32_t vector_get_i(VectorI *v, uint32_t offset) {
-    assert(offset < v->nvalues && "[vector_get_i] element index should be less than nvalues");
-
     return *(v->values + offset);
 }
 
@@ -560,15 +553,10 @@ void vector_inspect_i(VectorI *v) {
 }
 
 long double vector_get_f(VectorF *v, uint32_t offset) {
-    assert(offset < v->nvalues && "[vector_get_f] element index should be less than nvalues");
-
     return *(v->values + offset);
 }
 
 long double vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
-    assert(i < v->nvalues && "[vector_get_diff_f] i should be less than nvalues");
-    assert(j < v->nvalues && "[vector_get_diff_f] j should be less than nvalues");
-
     return *(v->values + i) - *(v->values + j);
 }
 
@@ -601,17 +589,11 @@ MatrixI *matrix_create_i(Arena *arena, uint32_t nrows, uint32_t ncols) {
 }
 
 void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, long double value) {
-    assert(i < m->nrows && "[matrix_set_f] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_set_f] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
 long double matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
-    assert(i < m->nrows && "[matrix_get_f] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_get_f] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
@@ -636,17 +618,11 @@ void matrix_inspect_i(MatrixI *m) {
 }
 
 void matrix_set_i(MatrixI *m, uint32_t i, uint32_t j, uint32_t value) {
-    assert(i < m->nrows && "[matrix_set_i] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_set_i] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
 uint32_t matrix_get_i(MatrixI *m, uint32_t i, uint32_t j) {
-    assert(i < m->nrows && "[matrix_get_i] row offset should be less than nrows");
-    assert(j < m->cols &&  "[matrix_get_i] col offset should be less than ncols");
-
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
