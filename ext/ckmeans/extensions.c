@@ -189,11 +189,11 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
 
 uint32_t find_koptimal(State state)
 {
-    uint32_t kmin           = state.kmin;
-    uint32_t kmax           = state.kmax;
-    uint32_t xcount         = state.xcount;
-    uint32_t kopt           = kmin;
-    uint32_t xindex_max     = state.xcount - 1;
+    uint32_t kmin          = state.kmin;
+    uint32_t kmax          = state.kmax;
+    uint32_t xcount        = state.xcount;
+    uint32_t kopt          = kmin;
+    uint32_t xindex_max    = state.xcount - 1;
     VectorF *xsorted       = state.xsorted;
     long double x0         = vector_get_f(xsorted, 0);
     long double xn         = vector_get_f(xsorted, xindex_max);
@@ -279,7 +279,7 @@ VectorI *backtrack_sizes(State state, uint32_t k)
 
 SegmentStats shifted_data_variance(VectorF *xsorted, uint32_t left, uint32_t right)
 {
-    const uint32_t n    = right - left + 1;
+    const uint32_t n   = right - left + 1;
     long double sum    = 0.0;
     long double sumsq  = 0.0;
     SegmentStats stats = { .mean = 0.0, .variance = 0.0 };
@@ -303,7 +303,8 @@ SegmentStats shifted_data_variance(VectorF *xsorted, uint32_t left, uint32_t rig
     return stats;
 }
 
-void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax) {
+void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax)
+{
     uint32_t size = imax - q + 1;
     VectorI *split_candidates = vector_create_i(state.arena, size);
     for (uint32_t i = 0; i < size; i++) {
@@ -313,7 +314,8 @@ void fill_row(State state, uint32_t q, uint32_t imin, uint32_t imax) {
     smawk(state, rparams, split_candidates);
 }
 
-void smawk(State state, RowParams rparams, VectorI *split_candidates) {
+void smawk(State state, RowParams rparams, VectorI *split_candidates)
+{
     const uint32_t imin  = rparams.imin;
     const uint32_t imax  = rparams.imax;
     const uint32_t istep = rparams.istep;
@@ -323,9 +325,9 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates) {
     } else {
         VectorI *odd_candidates = prune_candidates(state, rparams, split_candidates);
         /* printf("PRUNED\t"); vector_inspect_i(odd_candidates); */
-        uint32_t istepx2         = istep * 2;
-        uint32_t imin_odd        = imin + istep;
-        uint32_t imax_odd        = imin_odd + ((imax - imin_odd) / istepx2 * istepx2);
+        uint32_t istepx2        = istep * 2;
+        uint32_t imin_odd       = imin + istep;
+        uint32_t imax_odd       = imin_odd + ((imax - imin_odd) / istepx2 * istepx2);
         RowParams rparams_odd   = { .row = rparams.row, .imin = imin_odd, .imax = imax_odd, .istep = istepx2 };
 
         smawk(state, rparams_odd, odd_candidates);
@@ -342,9 +344,9 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     uint32_t n       = split_candidates->nvalues;
     uint32_t istepx2 = istep * 2;
     uint32_t jl      = vector_get_i(split_candidates, 0);
-    VectorF *xsum   = state.xsum;
-    VectorF *xsumsq = state.xsumsq;
-    MatrixI *splits = state.splits;
+    VectorF *xsum    = state.xsum;
+    VectorF *xsumsq  = state.xsumsq;
+    MatrixI *splits  = state.splits;
 
     for (uint32_t i = imin, r = 0; i <= imax; i += istepx2) {
         while (vector_get_i(split_candidates, r) < jl) r++;
@@ -391,10 +393,10 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
 
 void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    const uint32_t row     = rparams.row;
-    const uint32_t imin    = rparams.imin;
-    const uint32_t imax    = rparams.imax;
-    const uint32_t istep   = rparams.istep;
+    const uint32_t row    = rparams.row;
+    const uint32_t imin   = rparams.imin;
+    const uint32_t imax   = rparams.imax;
+    const uint32_t istep  = rparams.istep;
     MatrixF *const cost   = state.cost;
     MatrixI *const splits = state.splits;
 
@@ -405,7 +407,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         const uint32_t optimal_split_idx = optimal_split_idx_prev;
         const uint32_t optimal_split     = vector_get_i(split_candidates, optimal_split_idx);
         const uint32_t cost_prev         = matrix_get_f(cost, row - 1, optimal_split - 1);
-        const long double added_cost    = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
+        const long double added_cost     = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
 
         matrix_set_f(cost, row, i, cost_prev + added_cost);
         matrix_set_i(splits, row, i, optimal_split);
