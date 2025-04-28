@@ -1,0 +1,13 @@
+tmp
+
+# Ignore compiled extension files
+*.bundle
+*.so
+*.o
+*.dll
+
+# Ignore generated makefiles and compilation artifacts
+ext/**/Makefile
+ext/**/mkmf.log
+ext/**/*.log
+ext/**/tmp/
