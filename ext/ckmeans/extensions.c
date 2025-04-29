@@ -3,6 +3,8 @@
 #include <string.h>
 #include "ruby.h"
 
+typedef long double LDouble;
+
 typedef struct Arena {
     uint32_t capacity;
     uint32_t offset;
@@ -12,7 +14,7 @@ typedef struct Arena {
 typedef struct MatrixF {
     uint32_t ncols;
     uint32_t nrows;
-    long double *values;
+    LDouble *values;
 } MatrixF;
 
 typedef struct MatrixI {
@@ -23,7 +25,7 @@ typedef struct MatrixI {
 
 typedef struct VectorF {
     uint32_t size;
-    long double *values;
+    LDouble *values;
 } VectorF;
 
 typedef struct VectorI {
@@ -52,49 +54,49 @@ typedef struct RowParams {
 } RowParams;
 
 typedef struct {
-    long double mean;
-    long double variance;
+    LDouble mean;
+    LDouble variance;
 } SegmentStats;
 
-VALUE        rb_ckmeans_sorted_group_sizes(VALUE self);
+VALUE rb_ckmeans_sorted_group_sizes(VALUE self);
 
-Arena       *arena_create(uint32_t);
-void        *arena_alloc(Arena*, uint32_t);
-void         arena_destroy(Arena*);
+Arena *arena_create(uint32_t);
+void  *arena_alloc(Arena*, uint32_t);
+void  arena_destroy(Arena*);
 
-MatrixF     *matrix_create_f(Arena*, uint32_t, uint32_t);
-MatrixI     *matrix_create_i(Arena*, uint32_t, uint32_t);
-void         matrix_set_f(MatrixF*, uint32_t, uint32_t, long double value);
-long double  matrix_get_f(MatrixF*, uint32_t, uint32_t);
-void         matrix_inspect_f(MatrixF*);
-void         matrix_set_i(MatrixI*, uint32_t, uint32_t, uint32_t value);
-uint32_t     matrix_get_i(MatrixI*, uint32_t, uint32_t);
-void         matrix_inspect_i(MatrixI*);
+MatrixF  *matrix_create_f(Arena*, uint32_t, uint32_t);
+MatrixI  *matrix_create_i(Arena*, uint32_t, uint32_t);
+void     matrix_set_f(MatrixF*, uint32_t, uint32_t, LDouble value);
+LDouble  matrix_get_f(MatrixF*, uint32_t, uint32_t);
+void     matrix_inspect_f(MatrixF*);
+void     matrix_set_i(MatrixI*, uint32_t, uint32_t, uint32_t value);
+uint32_t matrix_get_i(MatrixI*, uint32_t, uint32_t);
+void     matrix_inspect_i(MatrixI*);
 
-VectorF     *vector_create_f(Arena*, uint32_t);
-void         vector_set_f(VectorF*, uint32_t offset, long double value);
-long double  vector_get_f(VectorF*, uint32_t offset);
-long double  vector_get_diff_f(VectorF*, uint32_t, uint32_t);
-void         vector_inspect_f(VectorF*);
-VectorI     *vector_create_i(Arena*, uint32_t);
-VectorI     *vector_dup_i(VectorI*, Arena*);
-void         vector_set_i(VectorI*, uint32_t offset, uint32_t value);
-uint32_t     vector_get_i(VectorI*, uint32_t offset);
-void         vector_downsize_i(VectorI*, uint32_t);
-void         vector_inspect_i(VectorI*);
+VectorF  *vector_create_f(Arena*, uint32_t);
+void     vector_set_f(VectorF*, uint32_t offset, LDouble value);
+LDouble  vector_get_f(VectorF*, uint32_t offset);
+LDouble  vector_get_diff_f(VectorF*, uint32_t, uint32_t);
+void     vector_inspect_f(VectorF*);
+VectorI  *vector_create_i(Arena*, uint32_t);
+VectorI  *vector_dup_i(VectorI*, Arena*);
+void     vector_set_i(VectorI*, uint32_t offset, uint32_t value);
+uint32_t vector_get_i(VectorI*, uint32_t offset);
+void     vector_downsize_i(VectorI*, uint32_t);
+void     vector_inspect_i(VectorI*);
 
-long double  dissimilarity(uint32_t, uint32_t, VectorF*, VectorF*);
+LDouble      dissimilarity(uint32_t, uint32_t, VectorF*, VectorF*);
 void         fill_row(State, uint32_t, uint32_t, uint32_t);
 void         smawk(State, RowParams, VectorI*);
 void         find_min_from_candidates(State, RowParams, VectorI*);
-VectorI     *prune_candidates(State, RowParams, VectorI*);
+VectorI      *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, uint32_t, uint32_t);
-VectorI     *backtrack_sizes(State, uint32_t);
+VectorI      *backtrack_sizes(State, uint32_t);
 uint32_t     find_koptimal(State);
 
 void Init_extensions(void) {
-    VALUE ckmeans_module = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
+    VALUE ckmeans_module  = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
     VALUE clusterer_class = rb_const_get(ckmeans_module, rb_intern("Clusterer"));
 
     rb_define_private_method(clusterer_class, "sorted_group_sizes", rb_ckmeans_sorted_group_sizes, 0);
@@ -125,7 +127,7 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     VectorF *xsumsq  = vector_create_f(arena, xcount);
 
     for (uint32_t i = 0; i < xcount; i++) {
-        long double xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
+        LDouble xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
         vector_set_f(xsorted, i, xi);
     }
 
@@ -143,17 +145,17 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
     };
 
 
-    long double shift        = vector_get_f(xsorted, xcount / 2);
-    long double diff_initial = vector_get_f(xsorted, 0) - shift;
+    LDouble shift        = vector_get_f(xsorted, xcount / 2);
+    LDouble diff_initial = vector_get_f(xsorted, 0) - shift;
 
     vector_set_f(xsum, 0, diff_initial);
     vector_set_f(xsumsq, 0, diff_initial * diff_initial);
 
     for (uint32_t i = 1; i < xcount; i++) {
-        long double xi          = vector_get_f(xsorted, i);
-        long double xsum_prev   = vector_get_f(xsum, i - 1);
-        long double xsumsq_prev = vector_get_f(xsumsq, i - 1);
-        long double diff        = xi - shift;
+        LDouble xi          = vector_get_f(xsorted, i);
+        LDouble xsum_prev   = vector_get_f(xsum, i - 1);
+        LDouble xsumsq_prev = vector_get_f(xsumsq, i - 1);
+        LDouble diff        = xi - shift;
 
         vector_set_f(xsum, i, xsum_prev + diff);
         vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
@@ -189,29 +191,29 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
 
 uint32_t find_koptimal(State state)
 {
-    uint32_t kmin          = state.kmin;
-    uint32_t kmax          = state.kmax;
-    uint32_t xcount        = state.xcount;
-    uint32_t kopt          = kmin;
-    uint32_t xindex_max    = state.xcount - 1;
-    VectorF *xsorted       = state.xsorted;
-    long double x0         = vector_get_f(xsorted, 0);
-    long double xn         = vector_get_f(xsorted, xindex_max);
-    long double max_bic    = 0.0;
-    long double adjustment = state.apply_deviation ? 0.0 : 1.0;
+    uint32_t kmin       = state.kmin;
+    uint32_t kmax       = state.kmax;
+    uint32_t xcount     = state.xcount;
+    uint32_t kopt       = kmin;
+    uint32_t xindex_max = state.xcount - 1;
+    VectorF *xsorted    = state.xsorted;
+    LDouble x0          = vector_get_f(xsorted, 0);
+    LDouble xn          = vector_get_f(xsorted, xindex_max);
+    LDouble max_bic     = 0.0;
+    LDouble adjustment  = state.apply_deviation ? 0.0 : 1.0;
 
     for (uint32_t k = kmin; k <= kmax; k++) {
         uint32_t index_right, index_left = 0;
-        long double bin_left, bin_right, loglikelihood = 0.0;
+        LDouble bin_left, bin_right, loglikelihood = 0.0;
         VectorI *sizes = backtrack_sizes(state, k);
 
         for (uint32_t kb = 0; kb < k; kb++) {
-            uint32_t npoints   = vector_get_i(sizes, kb);
-            index_right        = index_left + npoints - 1;
-            long double xleft  = vector_get_f(xsorted, index_left);
-            long double xright = vector_get_f(xsorted, index_right);
-            bin_left           = xleft;
-            bin_right          = xright;
+            uint32_t npoints = vector_get_i(sizes, kb);
+            index_right      = index_left + npoints - 1;
+            LDouble xleft    = vector_get_f(xsorted, index_left);
+            LDouble xright   = vector_get_f(xsorted, index_right);
+            bin_left         = xleft;
+            bin_right        = xright;
 
             if (xleft == xright) {
                 bin_left  = index_left == 0
@@ -222,18 +224,18 @@ uint32_t find_koptimal(State state)
                     : xn;
             }
 
-            long double bin_width = bin_right - bin_left;
-            SegmentStats stats    = shifted_data_variance(xsorted, index_left, index_right);
-            long double mean      = stats.mean;
-            long double variance  = stats.variance;
+            LDouble bin_width  = bin_right - bin_left;
+            SegmentStats stats = shifted_data_variance(xsorted, index_left, index_right);
+            LDouble mean       = stats.mean;
+            LDouble variance   = stats.variance;
 
             if (variance > 0) {
                 for (uint32_t i = index_left; i <= index_right; i++) {
-                    long double xi = vector_get_f(xsorted, i);
+                    LDouble xi     = vector_get_f(xsorted, i);
                     loglikelihood += -(xi - mean) * (xi - mean) / (2.0 * variance);
                 }
                 loglikelihood += npoints * (
-                    (log(npoints / (long double) xcount) * adjustment) -
+                    (log(npoints / (LDouble) xcount) * adjustment) -
                     (0.5 * log(PIx2 * variance))
                 );
             } else {
@@ -243,14 +245,14 @@ uint32_t find_koptimal(State state)
             index_left = index_right + 1;
         }
 
-        long double bic = (2.0 * loglikelihood) - (((3 * k) - 1) * log((long double) xcount));
+        LDouble bic = (2.0 * loglikelihood) - (((3 * k) - 1) * log((LDouble) xcount));
 
         if (k == kmin) {
             max_bic = bic;
-            kopt = kmin;
+            kopt    = kmin;
         } else if (bic > max_bic) {
             max_bic = bic;
-            kopt = k;
+            kopt    = k;
         }
     }
 
@@ -280,15 +282,15 @@ VectorI *backtrack_sizes(State state, uint32_t k)
 SegmentStats shifted_data_variance(VectorF *xsorted, uint32_t left, uint32_t right)
 {
     const uint32_t n   = right - left + 1;
-    long double sum    = 0.0;
-    long double sumsq  = 0.0;
+    LDouble sum        = 0.0;
+    LDouble sumsq      = 0.0;
     SegmentStats stats = { .mean = 0.0, .variance = 0.0 };
 
     if (right >= left) {
-        const long double median = vector_get_f(xsorted, (left + right) / 2);
+        const LDouble median = vector_get_f(xsorted, (left + right) / 2);
 
         for (uint32_t i = left; i <= right; i++) {
-            const long double sumi = vector_get_f(xsorted, i) - median;
+            const LDouble sumi = vector_get_f(xsorted, i) - median;
 
             sum   += sumi;
             sumsq += sumi * sumi;
@@ -354,19 +356,19 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
         uint32_t rcandidate    = vector_get_i(split_candidates, r);
         uint32_t cost_base_row = row - 1;
         uint32_t cost_base_col = rcandidate - 1;
-        long double cost       =
+        LDouble cost           =
             matrix_get_f(state.cost, cost_base_row, cost_base_col) + dissimilarity(rcandidate, i, xsum, xsumsq);
 
         matrix_set_f(state.cost, row, i, cost);
         matrix_set_i(state.splits, row, i, rcandidate);
 
-        uint32_t jh         =
-            (i + istep)    <= imax
+        uint32_t jh =
+            (i + istep) <= imax
             ? matrix_get_i(splits, row, i + istep)
             : vector_get_i(split_candidates, n - 1);
 
-        uint32_t jmax       = jh < i ? jh : i;
-        long double sjimin  = dissimilarity(jmax, i, xsum, xsumsq);
+        uint32_t jmax  = jh < i ? jh : i;
+        LDouble sjimin = dissimilarity(jmax, i, xsum, xsumsq);
 
         for (++r; r < n && vector_get_i(split_candidates, r) <= jmax; r++) {
             uint32_t jabs = vector_get_i(split_candidates, r);
@@ -374,9 +376,9 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
             if (jabs > i) break;
             if (jabs < matrix_get_i(splits, row - 1, i)) continue;
 
-            long double cost_base = matrix_get_f(state.cost, row - 1, jabs  - 1);
-            long double sj        = cost_base + dissimilarity(jabs, i, xsum, xsumsq);
-            long double cost_prev = matrix_get_f(state.cost, row, i);
+            LDouble cost_base = matrix_get_f(state.cost, row - 1, jabs  - 1);
+            LDouble sj        = cost_base + dissimilarity(jabs, i, xsum, xsumsq);
+            LDouble cost_prev = matrix_get_f(state.cost, row, i);
 
             if (sj <= cost_prev) {
                 matrix_set_f(state.cost, row, i, sj);
@@ -407,7 +409,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         const uint32_t optimal_split_idx = optimal_split_idx_prev;
         const uint32_t optimal_split     = vector_get_i(split_candidates, optimal_split_idx);
         const uint32_t cost_prev         = matrix_get_f(cost, row - 1, optimal_split - 1);
-        const long double added_cost     = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
+        const LDouble added_cost         = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
 
         matrix_set_f(cost, row, i, cost_prev + added_cost);
         matrix_set_i(splits, row, i, optimal_split);
@@ -419,7 +421,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
             if (split < matrix_get_i(splits, row - 1, i)) continue;
             if (split > i) break;
 
-            long double split_cost =
+            LDouble split_cost =
                 matrix_get_f(cost, row - 1, split - 1) + dissimilarity(split, i, state.xsum, state.xsumsq);
 
             if (split_cost > matrix_get_f(cost, row, i)) continue;
@@ -447,12 +449,12 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
 
     while (m > n)
     {
-        uint32_t i        = imin + left * istep;
-        uint32_t j        = vector_get_i(pruned, right);
-        uint32_t jnext    = vector_get_i(pruned, right + 1);
-        long double sl    =
+        uint32_t i     = imin + left * istep;
+        uint32_t j     = vector_get_i(pruned, right);
+        uint32_t jnext = vector_get_i(pruned, right + 1);
+        LDouble sl     =
             matrix_get_f(state.cost, row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
-        long double snext =
+        LDouble snext  =
             matrix_get_f(state.cost, row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
 
         if ((sl < snext) && (left < n - 1)) {
@@ -483,18 +485,18 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     return pruned;
 }
 
-long double dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
-    long double sji = 0.0;
+LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
+    LDouble sji = 0.0;
 
     if (j >= i) return sji;
 
     if (j > 0) {
-        long double segment_diff = vector_get_diff_f(xsum, i, j - 1);
-        uint32_t segment_size    = i - j + 1;
-        sji                      = vector_get_diff_f(xsumsq, i, j - 1) - (segment_diff * segment_diff / segment_size);
+        LDouble segment_diff  = vector_get_diff_f(xsum, i, j - 1);
+        uint32_t segment_size = i - j + 1;
+        sji                   = vector_get_diff_f(xsumsq, i, j - 1) - (segment_diff * segment_diff / segment_size);
     } else {
-        long double xsumi = vector_get_f(xsum, i);
-        sji               = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
+        LDouble xsumi = vector_get_f(xsum, i);
+        sji           = vector_get_f(xsumsq, i) - (xsumi * xsumi / (i + 1));
     }
 
     return (sji > 0) ? sji : 0.0;
@@ -529,7 +531,7 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
     return vdup;
 }
 
-void vector_set_f(VectorF *v, uint32_t offset, long double value) {
+void vector_set_f(VectorF *v, uint32_t offset, LDouble value) {
     *(v->values + offset) = value;
 }
 
@@ -551,11 +553,11 @@ void vector_inspect_i(VectorI *v) {
     printf("%u\n", vector_get_i(v, v->size - 1));
 }
 
-long double vector_get_f(VectorF *v, uint32_t offset) {
+LDouble vector_get_f(VectorF *v, uint32_t offset) {
     return *(v->values + offset);
 }
 
-long double vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
+LDouble vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
     return *(v->values + i) - *(v->values + j);
 }
 
@@ -587,12 +589,12 @@ MatrixI *matrix_create_i(Arena *arena, uint32_t nrows, uint32_t ncols) {
     return m;
 }
 
-void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, long double value) {
+void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, LDouble value) {
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
-long double matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
+LDouble matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
@@ -600,7 +602,7 @@ long double matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
 void matrix_inspect_f(MatrixF *m) {
     for (uint32_t i = 0; i < m->nrows; i++) {
         for (uint32_t j = 0; j < m->ncols - 1; j++) {
-            long double value = matrix_get_f(m, i, j);
+            LDouble value = matrix_get_f(m, i, j);
 
             printf("%Lf, ", value);
         }
