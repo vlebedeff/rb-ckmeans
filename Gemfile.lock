@@ -77,7 +77,6 @@ GEM
     rubocop-ast (1.43.0)
       parser (>= 3.3.7.2)
       prism (~> 1.4)
-    ruby-prof (1.7.1)
     ruby-progressbar (1.13.0)
     stringio (3.1.6)
     unicode-display_width (3.1.4)
@@ -99,7 +98,6 @@ DEPENDENCIES
   rake-compiler
   rspec (~> 3.0)
   rubocop (~> 1.21)
-  ruby-prof
 
 BUNDLED WITH
    2.6.5
