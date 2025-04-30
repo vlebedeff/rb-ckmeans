@@ -106,17 +106,15 @@ void Init_extensions(void) {
 # define ALLOCATION_FACTOR 18
 # define PIx2 (M_PI * 2.0)
 
-VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
-    VALUE rb_xcount              = rb_ivar_get(self, rb_intern("@xcount"));
-    VALUE rb_kmin                = rb_ivar_get(self, rb_intern("@kmin"));
-    VALUE rb_kmax                = rb_ivar_get(self, rb_intern("@kmax"));
-    VALUE rb_xsorted             = rb_ivar_get(self, rb_intern("@xsorted"));
-    VALUE rb_apply_bic_deviation = rb_ivar_get(self, rb_intern("@apply_bic_deviation"));
-    uint32_t xcount              = NUM2UINT(rb_xcount);
-    uint32_t kmin                = NUM2UINT(rb_kmin);
-    uint32_t kmax                = NUM2UINT(rb_kmax);
-    bool apply_deviation         = RTEST(rb_apply_bic_deviation);
-    Arena *arena                 = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
+VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
+{
+    uint32_t xcount      = NUM2UINT(rb_iv_get(self, "@xcount"));
+    uint32_t kmin        = NUM2UINT(rb_iv_get(self, "@kmin"));
+    uint32_t kmax        = NUM2UINT(rb_iv_get(self, "@kmax"));
+    bool apply_deviation = RTEST(rb_iv_get(self, "@apply_bic_deviation"));
+    VALUE rb_xsorted     = rb_iv_get(self, "@xsorted");
+
+    Arena *arena         = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
 
     if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
 
