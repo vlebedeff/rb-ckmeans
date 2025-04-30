@@ -201,7 +201,7 @@ uint32_t find_koptimal(State state)
     LDouble x0          = vector_get_f(xsorted, 0);
     LDouble xn          = vector_get_f(xsorted, xindex_max);
     LDouble max_bic     = 0.0;
-    LDouble adjustment  = state.apply_deviation ? 0.0 : 1.0;
+    LDouble xcount_log  = log((LDouble) xcount);
 
     VectorI *sizes = vector_create_i(state.arena, kmax);
     for (uint32_t k = kmin; k <= kmax; k++) {
@@ -237,7 +237,7 @@ uint32_t find_koptimal(State state)
                     loglikelihood += -(xi - mean) * (xi - mean) / (2.0 * variance);
                 }
                 loglikelihood += npoints * (
-                    (log(npoints / (LDouble) xcount) * adjustment) -
+                    (state.apply_deviation ? 0.0 : log(npoints / (LDouble) xcount)) -
                     (0.5 * log(PIx2 * variance))
                 );
             } else {
@@ -247,7 +247,7 @@ uint32_t find_koptimal(State state)
             index_left = index_right + 1;
         }
 
-        LDouble bic = (2.0 * loglikelihood) - (((3 * k) - 1) * log((LDouble) xcount));
+        LDouble bic = (2.0 * loglikelihood) - (((3 * k) - 1) * xcount_log);
 
         if (k == kmin) {
             max_bic = bic;
