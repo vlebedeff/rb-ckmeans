@@ -486,7 +486,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     return pruned;
 }
 
-LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
+inline LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
     LDouble sji = 0.0;
 
     if (j >= i) return sji;
@@ -503,7 +503,7 @@ LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
     return (sji > 0) ? sji : 0.0;
 }
 
-VectorF *vector_create_f(Arena *arena, uint32_t size) {
+inline VectorF *vector_create_f(Arena *arena, uint32_t size) {
     VectorF *v;
 
     v         = arena_alloc(arena, sizeof(*v));
@@ -513,7 +513,7 @@ VectorF *vector_create_f(Arena *arena, uint32_t size) {
     return v;
 }
 
-VectorI *vector_create_i(Arena *arena, uint32_t size) {
+inline VectorI *vector_create_i(Arena *arena, uint32_t size) {
     VectorI *v;
 
     v         = arena_alloc(arena, sizeof(*v));
@@ -523,7 +523,7 @@ VectorI *vector_create_i(Arena *arena, uint32_t size) {
     return v;
 }
 
-VectorI *vector_dup_i(VectorI *v, Arena *arena)
+inline VectorI *vector_dup_i(VectorI *v, Arena *arena)
 {
     VectorI *vdup = vector_create_i(arena, v->size);
 
@@ -532,19 +532,19 @@ VectorI *vector_dup_i(VectorI *v, Arena *arena)
     return vdup;
 }
 
-void vector_set_f(VectorF *v, uint32_t offset, LDouble value) {
+inline void vector_set_f(VectorF *v, uint32_t offset, LDouble value) {
     *(v->values + offset) = value;
 }
 
-void vector_set_i(VectorI *v, uint32_t offset, uint32_t value) {
+inline void vector_set_i(VectorI *v, uint32_t offset, uint32_t value) {
     *(v->values + offset) = value;
 }
 
-uint32_t vector_get_i(VectorI *v, uint32_t offset) {
+inline uint32_t vector_get_i(VectorI *v, uint32_t offset) {
     return *(v->values + offset);
 }
 
-void vector_downsize_i(VectorI *v, uint32_t new_size) {
+inline void vector_downsize_i(VectorI *v, uint32_t new_size) {
     v->size = new_size;
 }
 
@@ -554,11 +554,11 @@ void vector_inspect_i(VectorI *v) {
     printf("%u\n", vector_get_i(v, v->size - 1));
 }
 
-LDouble vector_get_f(VectorF *v, uint32_t offset) {
+inline LDouble vector_get_f(VectorF *v, uint32_t offset) {
     return *(v->values + offset);
 }
 
-LDouble vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
+inline LDouble vector_get_diff_f(VectorF *v, uint32_t i, uint32_t j) {
     return *(v->values + i) - *(v->values + j);
 }
 
@@ -590,12 +590,12 @@ MatrixI *matrix_create_i(Arena *arena, uint32_t nrows, uint32_t ncols) {
     return m;
 }
 
-void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, LDouble value) {
+inline void matrix_set_f(MatrixF *m, uint32_t i, uint32_t j, LDouble value) {
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
-LDouble matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
+inline LDouble matrix_get_f(MatrixF *m, uint32_t i, uint32_t j) {
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
@@ -619,12 +619,12 @@ void matrix_inspect_i(MatrixI *m) {
     }
 }
 
-void matrix_set_i(MatrixI *m, uint32_t i, uint32_t j, uint32_t value) {
+inline void matrix_set_i(MatrixI *m, uint32_t i, uint32_t j, uint32_t value) {
     uint32_t offset = i * m->ncols + j;
     *(m->values + offset) = value;
 }
 
-uint32_t matrix_get_i(MatrixI *m, uint32_t i, uint32_t j) {
+inline uint32_t matrix_get_i(MatrixI *m, uint32_t i, uint32_t j) {
     uint32_t offset = i * m->ncols + j;
     return *(m->values + offset);
 }
