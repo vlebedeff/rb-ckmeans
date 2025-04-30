@@ -92,7 +92,7 @@ void         find_min_from_candidates(State, RowParams, VectorI*);
 VectorI      *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, uint32_t, uint32_t);
-VectorI      *backtrack_sizes(State, uint32_t);
+VectorI      *backtrack_sizes(State, VectorI*, uint32_t);
 uint32_t     find_koptimal(State);
 
 void Init_extensions(void) {
@@ -103,7 +103,7 @@ void Init_extensions(void) {
 }
 
 # define ARENA_MIN_CAPACITY 1024
-# define ALLOCATION_FACTOR 20
+# define ALLOCATION_FACTOR 18
 # define PIx2 (M_PI * 2.0)
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
@@ -170,7 +170,8 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self) {
 
     uint32_t koptimal = find_koptimal(state);
 
-    VectorI *sizes = backtrack_sizes(state, koptimal);
+    VectorI *sizes = vector_create_i(arena, koptimal);
+    backtrack_sizes(state, sizes, koptimal);
 
     /* printf("XSORTED \t"); vector_inspect_f(xsorted); */
     /* printf("K OPTIMAL: %lld\n", koptimal); */
@@ -202,10 +203,11 @@ uint32_t find_koptimal(State state)
     LDouble max_bic     = 0.0;
     LDouble adjustment  = state.apply_deviation ? 0.0 : 1.0;
 
+    VectorI *sizes = vector_create_i(state.arena, kmax);
     for (uint32_t k = kmin; k <= kmax; k++) {
         uint32_t index_right, index_left = 0;
         LDouble bin_left, bin_right, loglikelihood = 0.0;
-        VectorI *sizes = backtrack_sizes(state, k);
+        backtrack_sizes(state, sizes, k);
 
         for (uint32_t kb = 0; kb < k; kb++) {
             uint32_t npoints = vector_get_i(sizes, kb);
@@ -259,10 +261,9 @@ uint32_t find_koptimal(State state)
     return kopt;
 }
 
-VectorI *backtrack_sizes(State state, uint32_t k)
+VectorI *backtrack_sizes(State state, VectorI *sizes, uint32_t k)
 {
     MatrixI *splits = state.splits;
-    VectorI *sizes  = vector_create_i(state.arena, k);
     uint32_t xcount = state.xcount;
     uint32_t right  = xcount - 1;
     uint32_t left   = 0;
