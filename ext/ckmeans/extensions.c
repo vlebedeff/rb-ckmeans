@@ -486,7 +486,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     return pruned;
 }
 
-inline LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *xsum, VectorF *xsumsq) {
+inline LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *restrict xsum, VectorF *restrict xsumsq) {
     LDouble sji = 0.0;
 
     if (j >= i) return sji;
