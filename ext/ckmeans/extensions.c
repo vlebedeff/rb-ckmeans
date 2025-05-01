@@ -103,6 +103,7 @@ void Init_extensions(void) {
 }
 
 # define ARENA_MIN_CAPACITY 100
+# define ALLOCATION_FACTOR 3
 # define PIx2 (M_PI * 2.0)
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
@@ -112,7 +113,7 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
     uint32_t kmax        = NUM2UINT(rb_iv_get(self, "@kmax"));
     bool apply_deviation = RTEST(rb_iv_get(self, "@apply_bic_deviation"));
     VALUE rb_xsorted     = rb_iv_get(self, "@xsorted");
-    size_t capacity      = sizeof(LDouble) * (xcount + 1) * (kmax + 1) * 2 + ARENA_MIN_CAPACITY;
+    size_t capacity      = sizeof(LDouble) * (xcount + 1) * (kmax + 1) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
     Arena *arena         = arena_create(capacity);
 
     if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
