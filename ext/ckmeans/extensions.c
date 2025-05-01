@@ -6,8 +6,8 @@
 typedef long double LDouble;
 
 typedef struct Arena {
-    uint32_t capacity;
-    uint32_t offset;
+    size_t capacity;
+    size_t offset;
     uint8_t  *buffer;
 } Arena;
 
@@ -60,8 +60,8 @@ typedef struct {
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self);
 
-Arena *arena_create(uint32_t);
-void  *arena_alloc(Arena*, uint32_t);
+Arena *arena_create(size_t);
+void  *arena_alloc(Arena*, size_t);
 void  arena_destroy(Arena*);
 
 MatrixF  *matrix_create_f(Arena*, uint32_t, uint32_t);
@@ -102,8 +102,7 @@ void Init_extensions(void) {
     rb_define_private_method(clusterer_class, "sorted_group_sizes", rb_ckmeans_sorted_group_sizes, 0);
 }
 
-# define ARENA_MIN_CAPACITY 1024
-# define ALLOCATION_FACTOR 18
+# define ARENA_MIN_CAPACITY 100
 # define PIx2 (M_PI * 2.0)
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
@@ -114,7 +113,12 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
     bool apply_deviation = RTEST(rb_iv_get(self, "@apply_bic_deviation"));
     VALUE rb_xsorted     = rb_iv_get(self, "@xsorted");
 
-    Arena *arena         = arena_create(sizeof(int) * xcount * kmax * ALLOCATION_FACTOR);
+    Arena *arena         =
+        arena_create(
+            sizeof(LDouble) * xcount * (kmax + 4) +
+            sizeof(uint32_t) * xcount * kmax * 5 +
+            ARENA_MIN_CAPACITY
+        );
 
     if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
 
@@ -627,7 +631,7 @@ inline uint32_t matrix_get_i(MatrixI *m, uint32_t i, uint32_t j) {
     return *(m->values + offset);
 }
 
-Arena *arena_create(uint32_t capacity) {
+Arena *arena_create(size_t capacity) {
     if (capacity < ARENA_MIN_CAPACITY) {
         capacity = ARENA_MIN_CAPACITY;
     }
@@ -655,7 +659,7 @@ Arena *arena_create(uint32_t capacity) {
     return arena;
 }
 
-void *arena_alloc(Arena *arena, uint32_t size) {
+void *arena_alloc(Arena *arena, size_t size) {
     size = (size + 7) & ~7;
 
     if (arena->offset + size > arena->capacity) {
@@ -670,7 +674,8 @@ void *arena_alloc(Arena *arena, uint32_t size) {
 }
 
 void arena_destroy(Arena *arena) {
-    /* printf("[Arena Destroy] Capacity: %u, offset: %u, left: %u\n", arena->capacity, arena->offset, arena->capacity - arena->offset); */
+    /* double leftover = ((double) arena->capacity - arena->offset) / arena->capacity * 100; */
+    /* printf("[Arena Destroy] Capacity: %zu, offset: %zu, left: %2.2f%%\n", arena->capacity, arena->offset, leftover); */
     free(arena->buffer);
     free(arena);
 }
