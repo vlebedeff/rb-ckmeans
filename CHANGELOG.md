@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.0.4] - 2025-05-01
+
+- Simpler capacity size expression ([#14](https://github.com/vlebedeff/rb-ckmeans/pull/14))
+
 ## [1.0.3] - 2025-05-01
 
 - More frugal memory allocation ([#11](https://github.com/vlebedeff/rb-ckmeans/pull/11))

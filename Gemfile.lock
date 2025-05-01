@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ckmeans (1.0.3)
+    ckmeans (1.0.4)
 
 GEM
   remote: https://rubygems.org/
