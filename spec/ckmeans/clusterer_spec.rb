@@ -41,7 +41,7 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       expect(ksensitive.clusters).to eq([[10], [11]])
     end
 
-    specify do
+    specify "multiple dupes of one unique value" do
       x = [1, 1, 1, 1]
       kflexible = described_class.new(x, 1, 4)
       ksensitive = described_class.new(x, 1, 4, :sensitive)
@@ -75,23 +75,23 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
     context "uniform positive sequence" do
       let(:x) { [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80] }
 
-      specify do
+      it "unconstrained K produces one cluster" do
         expect(described_class.new(x, 1, 15).clusters).to eq([x])
       end
 
-      specify do
+      it "unconstrained K produces one cluster for unsorted collection" do
         expect(described_class.new(x.shuffle, 1, 15).clusters).to eq([x])
       end
 
-      specify do
+      specify "K >= 2 produces two roughly equally sized clusters" do
         expect(described_class.new(x, 2, 15).clusters).to eq([x[0..7], x[8..15]])
       end
 
-      specify do
+      specify "K >= 3 produces three roughly equally sized clusters" do
         expect(described_class.new(x, 3, 15).clusters).to eq([x[0..5], x[6..10], x[11..15]])
       end
 
-      specify do
+      specify "K >= 6 produces six roughly equally sized clusters" do
         expect(described_class.new(x, 6, 15).clusters).to(
           eq([x[0..2], x[3..5], x[6..8], x[9..11], x[12..13], x[14..15]])
         )
@@ -108,14 +108,22 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
       end
     end
 
-    specify do
-      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1,
-                                 8).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
+    example do
+      x = [1, 1, 1, 100, 100, 100, 1000, 1000]
+      kmin = 1
+      kmax = 8
+      clusters = described_class.new(x, kmin, kmax).clusters
+
+      expect(clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
     end
 
     specify do
-      expect(described_class.new([1, 1, 1, 100, 100, 100, 1000, 1000], 1, 3,
-                                 :sensitive).clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
+      x = [1, 1, 1, 100, 100, 100, 1000, 1000]
+      kmin = 1
+      kmax = 8
+      clusters = described_class.new(x, kmin, kmax, :sensitive).clusters
+
+      expect(clusters).to eq([[1, 1, 1, 100, 100, 100], [1000, 1000]])
     end
 
     specify do
