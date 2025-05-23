@@ -63,6 +63,7 @@ typedef struct {
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self);
 VALUE rb_ckmedian_sorted_group_sizes(VALUE self);
+VALUE rb_sorted_group_sizes(VALUE self, FnDissim*);
 
 Arena *arena_create(size_t);
 void  *arena_alloc(Arena*, size_t);
@@ -117,90 +118,15 @@ void Init_extensions(void) {
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
 {
-    uint32_t xcount      = NUM2UINT(rb_iv_get(self, "@xcount"));
-    uint32_t kmin        = NUM2UINT(rb_iv_get(self, "@kmin"));
-    uint32_t kmax        = NUM2UINT(rb_iv_get(self, "@kmax"));
-    bool apply_deviation = RTEST(rb_iv_get(self, "@apply_bic_deviation"));
-    VALUE rb_xsorted     = rb_iv_get(self, "@xsorted");
-    size_t capacity      = sizeof(LDouble) * (xcount + 1) * (kmax + 1) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
-    Arena *arena         = arena_create(capacity);
-
-    if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
-
-    MatrixF *cost    = matrix_create_f(arena, kmax, xcount);
-    MatrixI *splits  = matrix_create_i(arena, kmax, xcount);
-    VectorF *xsorted = vector_create_f(arena, xcount);
-    VectorF *xsum    = vector_create_f(arena, xcount);
-    VectorF *xsumsq  = vector_create_f(arena, xcount);
-
-    for (uint32_t i = 0; i < xcount; i++) {
-        LDouble xi = NUM2DBL(rb_ary_entry(rb_xsorted, i));
-        vector_set_f(xsorted, i, xi);
-    }
-
-    FnDissim *const dissim = dissimilarity_l2;
-
-    State state = {
-        .arena           = arena,
-        .xcount          = xcount,
-        .kmin            = kmin,
-        .kmax            = kmax,
-        .apply_deviation = apply_deviation,
-        .xsorted         = xsorted,
-        .cost            = cost,
-        .splits          = splits,
-        .xsum            = xsum,
-        .xsumsq          = xsumsq,
-        .dissim          = dissim
-    };
-
-
-    LDouble shift        = vector_get_f(xsorted, xcount / 2);
-    LDouble diff_initial = vector_get_f(xsorted, 0) - shift;
-
-    vector_set_f(xsum, 0, diff_initial);
-    vector_set_f(xsumsq, 0, diff_initial * diff_initial);
-
-    for (uint32_t i = 1; i < xcount; i++) {
-        LDouble xi          = vector_get_f(xsorted, i);
-        LDouble xsum_prev   = vector_get_f(xsum, i - 1);
-        LDouble xsumsq_prev = vector_get_f(xsumsq, i - 1);
-        LDouble diff        = xi - shift;
-
-        vector_set_f(xsum, i, xsum_prev + diff);
-        vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
-        matrix_set_f(cost, 0, i, dissim(0, i, xsum, xsumsq));
-        matrix_set_i(splits, 0, i, 0);
-    }
-
-    for (uint32_t q = 1; q <= kmax - 1; q++) {
-        uint32_t imin = (q < kmax - 1) ? ((q > 1) ? q : 1) : xcount - 1;
-        fill_row(state, q, imin, xcount - 1);
-    }
-
-    uint32_t koptimal = find_koptimal(state);
-
-    VectorI *sizes = vector_create_i(arena, koptimal);
-    backtrack_sizes(state, sizes, koptimal);
-
-    /* printf("XSORTED \t"); vector_inspect_f(xsorted); */
-    /* printf("K OPTIMAL: %lld\n", koptimal); */
-    /* printf("SIZES \t"); vector_inspect_i(sizes); */
-    /* printf("FINAL COST\n"); matrix_inspect_f(cost); */
-    /* printf("FINAL SPLITS\n"); matrix_inspect_i(splits); */
-
-    VALUE response = rb_ary_new2(sizes->size);
-    for (uint32_t i = 0; i < sizes->size; i++) {
-        VALUE size = LONG2NUM(vector_get_i(sizes, i));
-        rb_ary_store(response, i, size);
-    }
-
-    arena_destroy(arena);
-
-    return response;
+    return rb_sorted_group_sizes(self, dissimilarity_l2);
 }
 
 VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
+{
+    return rb_sorted_group_sizes(self, dissimilarity_l1);
+}
+
+VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
 {
     uint32_t xcount      = NUM2UINT(rb_iv_get(self, "@xcount"));
     uint32_t kmin        = NUM2UINT(rb_iv_get(self, "@kmin"));
@@ -223,8 +149,6 @@ VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
         vector_set_f(xsorted, i, xi);
     }
 
-    FnDissim *const dissim = dissimilarity_l1;
-
     State state = {
         .arena           = arena,
         .xcount          = xcount,
@@ -236,7 +160,7 @@ VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
         .splits          = splits,
         .xsum            = xsum,
         .xsumsq          = xsumsq,
-        .dissim          = dissim
+        .dissim          = criteria
     };
 
 
@@ -254,7 +178,7 @@ VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
 
         vector_set_f(xsum, i, xsum_prev + diff);
         vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
-        matrix_set_f(cost, 0, i, dissim(0, i, xsum, xsumsq));
+        matrix_set_f(cost, 0, i, criteria(0, i, xsum, xsumsq));
         matrix_set_i(splits, 0, i, 0);
     }
 
