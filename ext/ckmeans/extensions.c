@@ -33,6 +33,8 @@ typedef struct VectorI {
     uint32_t *values;
 } VectorI;
 
+typedef LDouble (FnDissim)(uint32_t, uint32_t, VectorF*, VectorF*);
+
 typedef struct State {
     uint32_t xcount;
     uint32_t kmin;
@@ -44,6 +46,7 @@ typedef struct State {
     MatrixI *splits;
     VectorF *xsum;
     VectorF *xsumsq;
+    FnDissim *dissim;
 } State;
 
 typedef struct RowParams {
@@ -85,7 +88,7 @@ uint32_t vector_get_i(VectorI*, uint32_t offset);
 void     vector_downsize_i(VectorI*, uint32_t);
 void     vector_inspect_i(VectorI*);
 
-LDouble      dissimilarity(uint32_t, uint32_t, VectorF*, VectorF*);
+LDouble      dissimilarity_l2(uint32_t, uint32_t, VectorF*, VectorF*);
 void         fill_row(State, uint32_t, uint32_t, uint32_t);
 void         smawk(State, RowParams, VectorI*);
 void         find_min_from_candidates(State, RowParams, VectorI*);
@@ -94,6 +97,7 @@ void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, uint32_t, uint32_t);
 VectorI      *backtrack_sizes(State, VectorI*, uint32_t);
 uint32_t     find_koptimal(State);
+
 
 void Init_extensions(void) {
     VALUE ckmeans_module  = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -129,6 +133,8 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
         vector_set_f(xsorted, i, xi);
     }
 
+    FnDissim *const dissim = dissimilarity_l2;
+
     State state = {
         .arena           = arena,
         .xcount          = xcount,
@@ -139,7 +145,8 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
         .cost            = cost,
         .splits          = splits,
         .xsum            = xsum,
-        .xsumsq          = xsumsq
+        .xsumsq          = xsumsq,
+        .dissim          = dissim
     };
 
 
@@ -157,7 +164,7 @@ VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
 
         vector_set_f(xsum, i, xsum_prev + diff);
         vector_set_f(xsumsq, i, xsumsq_prev + diff * diff);
-        matrix_set_f(cost, 0, i, dissimilarity(0, i, xsum, xsumsq));
+        matrix_set_f(cost, 0, i, dissim(0, i, xsum, xsumsq));
         matrix_set_i(splits, 0, i, 0);
     }
 
@@ -336,7 +343,7 @@ void smawk(State state, RowParams rparams, VectorI *split_candidates)
     }
 }
 
-void fill_even_positions(State state, RowParams rparams, VectorI *split_candidates)
+inline void fill_even_positions(State state, RowParams rparams, VectorI *split_candidates)
 {
     uint32_t row     = rparams.row;
     uint32_t imin    = rparams.imin;
@@ -345,9 +352,10 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     uint32_t n       = split_candidates->size;
     uint32_t istepx2 = istep * 2;
     uint32_t jl      = vector_get_i(split_candidates, 0);
-    VectorF *xsum    = state.xsum;
-    VectorF *xsumsq  = state.xsumsq;
-    MatrixI *splits  = state.splits;
+    VectorF *const xsum    = state.xsum;
+    VectorF *const xsumsq  = state.xsumsq;
+    MatrixI *const splits  = state.splits;
+    FnDissim *const dissim = state.dissim;
 
     for (uint32_t i = imin, r = 0; i <= imax; i += istepx2) {
         while (vector_get_i(split_candidates, r) < jl) r++;
@@ -356,7 +364,7 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
         uint32_t cost_base_row = row - 1;
         uint32_t cost_base_col = rcandidate - 1;
         LDouble cost           =
-            matrix_get_f(state.cost, cost_base_row, cost_base_col) + dissimilarity(rcandidate, i, xsum, xsumsq);
+            matrix_get_f(state.cost, cost_base_row, cost_base_col) + dissim(rcandidate, i, xsum, xsumsq);
 
         matrix_set_f(state.cost, row, i, cost);
         matrix_set_i(state.splits, row, i, rcandidate);
@@ -367,7 +375,7 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
             : vector_get_i(split_candidates, n - 1);
 
         uint32_t jmax  = jh < i ? jh : i;
-        LDouble sjimin = dissimilarity(jmax, i, xsum, xsumsq);
+        LDouble sjimin = dissim(jmax, i, xsum, xsumsq);
 
         for (++r; r < n && vector_get_i(split_candidates, r) <= jmax; r++) {
             uint32_t jabs = vector_get_i(split_candidates, r);
@@ -376,7 +384,7 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
             if (jabs < matrix_get_i(splits, row - 1, i)) continue;
 
             LDouble cost_base = matrix_get_f(state.cost, row - 1, jabs  - 1);
-            LDouble sj        = cost_base + dissimilarity(jabs, i, xsum, xsumsq);
+            LDouble sj        = cost_base + dissim(jabs, i, xsum, xsumsq);
             LDouble cost_prev = matrix_get_f(state.cost, row, i);
 
             if (sj <= cost_prev) {
@@ -392,7 +400,7 @@ void fill_even_positions(State state, RowParams rparams, VectorI *split_candidat
     }
 }
 
-void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
+inline void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
     const uint32_t row    = rparams.row;
     const uint32_t imin   = rparams.imin;
@@ -400,6 +408,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
     const uint32_t istep  = rparams.istep;
     MatrixF *const cost   = state.cost;
     MatrixI *const splits = state.splits;
+    FnDissim *const dissim = state.dissim;
 
     uint32_t optimal_split_idx_prev = 0;
 
@@ -408,7 +417,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
         const uint32_t optimal_split_idx = optimal_split_idx_prev;
         const uint32_t optimal_split     = vector_get_i(split_candidates, optimal_split_idx);
         const uint32_t cost_prev         = matrix_get_f(cost, row - 1, optimal_split - 1);
-        const LDouble added_cost         = dissimilarity(optimal_split, i, state.xsum, state.xsumsq);
+        const LDouble added_cost         = dissim(optimal_split, i, state.xsum, state.xsumsq);
 
         matrix_set_f(cost, row, i, cost_prev + added_cost);
         matrix_set_i(splits, row, i, optimal_split);
@@ -421,7 +430,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
             if (split > i) break;
 
             LDouble split_cost =
-                matrix_get_f(cost, row - 1, split - 1) + dissimilarity(split, i, state.xsum, state.xsumsq);
+                matrix_get_f(cost, row - 1, split - 1) + dissim(split, i, state.xsum, state.xsumsq);
 
             if (split_cost > matrix_get_f(cost, row, i)) continue;
 
@@ -432,7 +441,7 @@ void find_min_from_candidates(State state, RowParams rparams, VectorI *split_can
     }
 }
 
-VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candidates)
+inline VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
     uint32_t imin  = rparams.imin;
     uint32_t row   = rparams.row;
@@ -445,6 +454,7 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     uint32_t left   = 0;
     uint32_t right  = 0;
     VectorI *pruned = vector_dup_i(split_candidates, state.arena);
+    FnDissim *const dissim = state.dissim;
 
     while (m > n)
     {
@@ -452,9 +462,9 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
         uint32_t j     = vector_get_i(pruned, right);
         uint32_t jnext = vector_get_i(pruned, right + 1);
         LDouble sl     =
-            matrix_get_f(state.cost, row - 1, j - 1) + dissimilarity(j, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, j - 1) + dissim(j, i, state.xsum, state.xsumsq);
         LDouble snext  =
-            matrix_get_f(state.cost, row - 1, jnext - 1) + dissimilarity(jnext, i, state.xsum, state.xsumsq);
+            matrix_get_f(state.cost, row - 1, jnext - 1) + dissim(jnext, i, state.xsum, state.xsumsq);
 
         if ((sl < snext) && (left < n - 1)) {
             vector_set_i(pruned, left, j);
@@ -484,7 +494,8 @@ VectorI *prune_candidates(State state, RowParams rparams, VectorI *split_candida
     return pruned;
 }
 
-inline LDouble dissimilarity(uint32_t j, uint32_t i, VectorF *restrict xsum, VectorF *restrict xsumsq) {
+/* L2 aka Euclidean aka Mean dissimilarity criteria */
+inline LDouble dissimilarity_l2(uint32_t j, uint32_t i, VectorF *restrict xsum, VectorF *restrict xsumsq) {
     LDouble sji = 0.0;
 
     if (j >= i) return sji;
