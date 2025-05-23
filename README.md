@@ -19,9 +19,16 @@ gem install ckmeans
 ## Usage
 
 ```rb
-Ckmeans::Clusterer(data, kmin).clusters # fixed cluster count
-Ckmeans::Clusterer(data, kmin, kmax).clusters # estimate optimal cluster count within kmin and kmax
-Ckmeans::Clusterer(data, kmin, kmax, :sensitive).clusters # Adjust Bayesian Information Criteria favoring more smaller clusters
+# Fixed cluster count
+Ckmeans::Clusterer(data, kmin).clusters
+Ckmedian::Clusterer(data, kmin).clusters
+
+# Estimate optimal cluster count within kmin and kmax
+Ckmeans::Clusterer(data, kmin, kmax).clusters
+Ckmedian::Clusterer(data, kmin, kmax).clusters
+
+# Adjust Bayesian Information Criteria favoring more smaller clusters (Ckmeans only)
+Ckmeans::Clusterer(data, kmin, kmax, :sensitive).clusters
 ```
 
 ## License
