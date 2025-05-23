@@ -28,5 +28,3 @@ module Ckmeans
     end
   end
 end
-
-require "ckmeans/extensions"

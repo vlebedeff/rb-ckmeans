@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "ckmeans"
-require "ckmedian"
 require "benchmark"
 
 RSpec.configure do |config|

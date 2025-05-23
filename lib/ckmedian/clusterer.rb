@@ -20,7 +20,6 @@ module Ckmedian
         if @unique_xcount <= 1
           [@xsorted_original]
         else
-          # TODO: Not Implemented
           sorted_group_sizes.each_with_object([]) do |size, groups|
             groups << @xsorted_original.shift(size)
           end
@@ -28,5 +27,3 @@ module Ckmedian
     end
   end
 end
-
-require "ckmeans/extensions"
