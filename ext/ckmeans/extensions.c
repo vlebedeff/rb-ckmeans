@@ -132,7 +132,7 @@ VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
     uint32_t kmax    = NUM2UINT(rb_iv_get(self, "@kmax"));
     bool use_gmm     = RTEST(rb_iv_get(self, "@use_gmm"));
     VALUE rb_xsorted = rb_iv_get(self, "@xsorted");
-    size_t capacity  = sizeof(LDouble) * (xcount + 1) * (kmax + 1) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
+    size_t capacity  = sizeof(LDouble) * (xcount + 2) * (kmax + 2) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
     Arena *arena     = arena_create(capacity);
 
     if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");

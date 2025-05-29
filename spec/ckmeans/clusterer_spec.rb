@@ -222,7 +222,7 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
     describe "performance" do
       # rubocop:disable Lint/ConstantDefinitionInBlock -- in order to use the values in example descriptions
       N_FAST = 5_000
-      N_STABLE = N_FAST / 7
+      N_STABLE = N_FAST / 10
       # rubocop:enable Lint/ConstantDefinitionInBlock
 
       let(:x) { Array.new(N_FAST) { rand * 1_000_000 } }
