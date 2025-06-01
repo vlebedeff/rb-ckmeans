@@ -815,7 +815,7 @@ Arena *arena_create(size_t capacity) {
 }
 
 void *arena_alloc(Arena *arena, size_t size) {
-    size = (size + 7) & ~7;
+    size = (size + 0xf) & ~0xf;
 
     if (arena->offset + size > arena->capacity) {
         rb_raise(rb_eNoMemError, "Arena Insufficient Capacity");
