@@ -39,7 +39,6 @@ typedef struct State {
     uint32_t xcount;
     uint32_t kmin;
     uint32_t kmax;
-    bool     apply_deviation;
     Arena   *arena;
     VectorF *xsorted;
     MatrixF *cost;
@@ -99,8 +98,8 @@ VectorI      *prune_candidates(State, RowParams, VectorI*);
 void         fill_even_positions(State, RowParams, VectorI*);
 SegmentStats shifted_data_variance(VectorF*, uint32_t, uint32_t);
 VectorI      *backtrack_sizes(State, VectorI*, uint32_t);
-uint32_t     find_koptimal(State);
-
+uint32_t     find_koptimal_fast(State);
+uint32_t     find_koptimal_gmm(State);
 
 void Init_extensions(void) {
     VALUE ckmeans_module     = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -128,13 +127,13 @@ VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
 
 VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
 {
-    uint32_t xcount      = NUM2UINT(rb_iv_get(self, "@xcount"));
-    uint32_t kmin        = NUM2UINT(rb_iv_get(self, "@kmin"));
-    uint32_t kmax        = NUM2UINT(rb_iv_get(self, "@kmax"));
-    bool apply_deviation = RTEST(rb_iv_get(self, "@apply_bic_deviation"));
-    VALUE rb_xsorted     = rb_iv_get(self, "@xsorted");
-    size_t capacity      = sizeof(LDouble) * (xcount + 1) * (kmax + 1) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
-    Arena *arena         = arena_create(capacity);
+    uint32_t xcount  = NUM2UINT(rb_iv_get(self, "@xcount"));
+    uint32_t kmin    = NUM2UINT(rb_iv_get(self, "@kmin"));
+    uint32_t kmax    = NUM2UINT(rb_iv_get(self, "@kmax"));
+    bool use_gmm     = RTEST(rb_iv_get(self, "@use_gmm"));
+    VALUE rb_xsorted = rb_iv_get(self, "@xsorted");
+    size_t capacity  = sizeof(LDouble) * (xcount + 2) * (kmax + 2) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
+    Arena *arena     = arena_create(capacity);
 
     if (arena == NULL) rb_raise(rb_eNoMemError, "Arena Memory Allocation Failed");
 
@@ -150,17 +149,16 @@ VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
     }
 
     State state = {
-        .arena           = arena,
-        .xcount          = xcount,
-        .kmin            = kmin,
-        .kmax            = kmax,
-        .apply_deviation = apply_deviation,
-        .xsorted         = xsorted,
-        .cost            = cost,
-        .splits          = splits,
-        .xsum            = xsum,
-        .xsumsq          = xsumsq,
-        .dissim          = criteria
+        .arena   = arena,
+        .xcount  = xcount,
+        .kmin    = kmin,
+        .kmax    = kmax,
+        .xsorted = xsorted,
+        .cost    = cost,
+        .splits  = splits,
+        .xsum    = xsum,
+        .xsumsq  = xsumsq,
+        .dissim  = criteria
     };
 
 
@@ -187,7 +185,7 @@ VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
         fill_row(state, q, imin, xcount - 1);
     }
 
-    uint32_t koptimal = find_koptimal(state);
+    uint32_t koptimal = use_gmm ? find_koptimal_gmm(state) : find_koptimal_fast(state);
 
     VectorI *sizes = vector_create_i(arena, koptimal);
     backtrack_sizes(state, sizes, koptimal);
@@ -209,7 +207,7 @@ VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
     return response;
 }
 
-uint32_t find_koptimal(State state)
+uint32_t find_koptimal_fast(State state)
 {
     uint32_t kmin       = state.kmin;
     uint32_t kmax       = state.kmax;
@@ -256,8 +254,7 @@ uint32_t find_koptimal(State state)
                     loglikelihood += -(xi - mean) * (xi - mean) / (2.0 * variance);
                 }
                 loglikelihood += npoints * (
-                    (state.apply_deviation ? 0.0 : log(npoints / (LDouble) xcount)) -
-                    (0.5 * log(PIx2 * variance))
+                    log(npoints / (LDouble) xcount) - (0.5 * log(PIx2 * variance))
                 );
             } else {
                 loglikelihood += npoints * log(1.0 / bin_width / xcount);
@@ -277,6 +274,101 @@ uint32_t find_koptimal(State state)
         }
     }
 
+    return kopt;
+}
+
+uint32_t find_koptimal_gmm(State state)
+{
+    uint32_t kmin = state.kmin;
+    uint32_t kmax = state.kmax;
+    uint32_t xcount = state.xcount;
+
+    if (kmin > kmax || xcount < 2) {
+        return (kmin < kmax) ? kmin : kmax;
+    }
+
+    Arena *arena       = state.arena;
+    VectorF *xsorted   = state.xsorted;
+    uint32_t kopt      = kmin;
+    LDouble max_bic    = 0.0;
+    LDouble log_xcount = log((LDouble) xcount);
+    VectorF *lambda    = vector_create_f(arena, kmax);
+    VectorF *mu        = vector_create_f(arena, kmax);
+    VectorF *sigma2    = vector_create_f(arena, kmax);
+    VectorF *coeff     = vector_create_f(arena, kmax);
+    VectorI *sizes     = vector_create_i(arena, kmax);
+
+    for (uint32_t kouter = kmin; kouter <= kmax; ++kouter)
+    {
+        uint32_t ileft = 0;
+        uint32_t iright;
+
+        backtrack_sizes(state, sizes, kouter);
+
+        for (uint32_t k = 0; k < kouter; ++k)
+        {
+            uint32_t size = vector_get_i(sizes, k);
+            vector_set_f(lambda, k, size / (LDouble) xcount);
+            iright = ileft + size - 1;
+            SegmentStats stats = shifted_data_variance(xsorted, ileft, iright);
+
+            vector_set_f(mu, k, stats.mean);
+            vector_set_f(sigma2, k, stats.variance);
+
+            if (stats.variance == 0 || size == 1) {
+                LDouble dmin;
+
+                if (ileft > 0 && iright < xcount - 1) {
+                    LDouble left_diff = vector_get_diff_f(xsorted, ileft, ileft - 1);
+                    LDouble right_diff = vector_get_diff_f(xsorted, iright + 1, iright);
+
+                    dmin = (left_diff < right_diff) ? left_diff : right_diff;
+                } else if (ileft > 0) {
+                    dmin = vector_get_diff_f(xsorted, ileft, ileft - 1);
+                } else {
+                    dmin = vector_get_diff_f(xsorted, iright + 1, iright);
+                }
+
+                if (stats.variance == 0) vector_set_f(sigma2, k, dmin * dmin / 4.0 / 9.0);
+                if (size == 1)  vector_set_f(sigma2, k, dmin * dmin);
+            }
+
+            LDouble lambda_k = vector_get_f(lambda, k);
+            LDouble sigma2_k = vector_get_f(sigma2, k);
+            vector_set_f(coeff, k, lambda_k / sqrt(PIx2 * sigma2_k));
+            ileft = iright + 1;
+        }
+
+        LDouble loglikelihood = 0.0;
+
+        for (uint32_t i = 0; i < xcount; ++i)
+        {
+            LDouble L  = 0.0;
+            LDouble xi = vector_get_f(xsorted, i);
+
+            for (uint32_t k = 0; k < kouter; ++k)
+            {
+                LDouble coeff_k   = vector_get_f(coeff, k);
+                LDouble mu_k      = vector_get_f(mu, k);
+                LDouble sigma2_k  = vector_get_f(sigma2, k);
+                LDouble x_mu_diff = xi - mu_k;
+                L                += coeff_k * exp(- x_mu_diff * x_mu_diff / (2.0 * sigma2_k));
+            }
+            loglikelihood += log(L);
+        }
+
+        LDouble bic = 2 * loglikelihood - (3 * kouter - 1) * log_xcount;
+
+        if (kouter == kmin) {
+            max_bic = bic;
+            kopt = kmin;
+        } else {
+            if (bic > max_bic) {
+                max_bic = bic;
+                kopt = kouter;
+            }
+        }
+    }
     return kopt;
 }
 
@@ -416,12 +508,12 @@ inline void fill_even_positions(State state, RowParams rparams, VectorI *split_c
 
 inline void find_min_from_candidates(State state, RowParams rparams, VectorI *split_candidates)
 {
-    const uint32_t row    = rparams.row;
-    const uint32_t imin   = rparams.imin;
-    const uint32_t imax   = rparams.imax;
-    const uint32_t istep  = rparams.istep;
-    MatrixF *const cost   = state.cost;
-    MatrixI *const splits = state.splits;
+    const uint32_t row     = rparams.row;
+    const uint32_t imin    = rparams.imin;
+    const uint32_t imax    = rparams.imax;
+    const uint32_t istep   = rparams.istep;
+    MatrixF *const cost    = state.cost;
+    MatrixI *const splits  = state.splits;
     FnDissim *const dissim = state.dissim;
 
     uint32_t optimal_split_idx_prev = 0;
@@ -723,7 +815,7 @@ Arena *arena_create(size_t capacity) {
 }
 
 void *arena_alloc(Arena *arena, size_t size) {
-    size = (size + 7) & ~7;
+    size = (size + 0xf) & ~0xf;
 
     if (arena->offset + size > arena->capacity) {
         rb_raise(rb_eNoMemError, "Arena Insufficient Capacity");
