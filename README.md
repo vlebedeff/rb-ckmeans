@@ -18,17 +18,31 @@ gem install ckmeans
 
 ## Usage
 
+### Fixed Cluster Count
+
 ```rb
 # Fixed cluster count
 Ckmeans::Clusterer(data, kmin).clusters
 Ckmedian::Clusterer(data, kmin).clusters
+```
 
-# Estimate optimal cluster count within kmin and kmax
+### Estimate optimal cluster count within kmin and kmax
+
+```rb
 Ckmeans::Clusterer(data, kmin, kmax).clusters
 Ckmedian::Clusterer(data, kmin, kmax).clusters
+```
 
-# Adjust Bayesian Information Criteria favoring more smaller clusters (Ckmeans only)
-Ckmeans::Clusterer(data, kmin, kmax, :sensitive).clusters
+### Fast & Stable Estimation of K
+
+For big collections without many duplicates, use regular estimation.
+For relatively small sets or sets with many duplicates use Gaussian Mixture Model (GMM)-based estimation.
+It works slower but is more resilient for various data patterns like big numbers of duplicates or clusters with different
+numbers of elements.
+
+```rb
+Ckmeans::Clusterer(data, kmin, kmax, :gmm).clusters
+Ckmedian::Clusterer(data, kmin, kmax, :gmm).clusters
 ```
 
 ## License
