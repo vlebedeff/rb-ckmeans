@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## [2.1.1] - 2025-12-14
+
+- Avoid pointers for hot-path functions to benefit from `inline` ([#20](https://github.com/vlebedeff/rb-ckmeans/pull/20))
+
+## [2.1.0] - 2025-12-14
+
+- Use `:fast` and `:stable` estimation keywords ([#19](https://github.com/vlebedeff/rb-ckmeans/pull/19))
+
+## [2.0.0] - 2025-06-03
+
+- Integrate GMM-based optimal K count estimation ([#17](https://github.com/vlebedeff/rb-ckmeans/pull/17))
+
+## [1.1.0] - 2025-05-23
+
+- Add Ckmedian implementation (L1 dissimilarity criteria) ([#16](https://github.com/vlebedeff/rb-ckmeans/pull/16))
+
 ## [1.0.4] - 2025-05-01
 
 - Simpler capacity size expression ([#14](https://github.com/vlebedeff/rb-ckmeans/pull/14))
