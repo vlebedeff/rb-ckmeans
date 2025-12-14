@@ -26,12 +26,12 @@ module Ckmeans
       raise ArgumentError, "Minimum cluster count is bigger than element count" if kmin > @xcount
       raise ArgumentError, "Maximum cluster count is bigger than element count" if kmax > @xcount
 
-      @kmin             = kmin
-      @unique_xcount    = entries.uniq.size
-      @kmax             = [@unique_xcount, kmax].min
-      @xsorted_original = entries.sort
-      @xsorted          = @xsorted_original.map(&:to_f)
-      @use_gmm          = %i[gmm stable].include?(kestimate)
+      @kmin                  = kmin
+      @unique_xcount         = entries.uniq.size
+      @kmax                  = [@unique_xcount, kmax].min
+      @xsorted_original      = entries.sort
+      @xsorted               = @xsorted_original.map(&:to_f)
+      @use_stable_estimation = %i[gmm stable].include?(kestimate)
     end
 
     def clusters
