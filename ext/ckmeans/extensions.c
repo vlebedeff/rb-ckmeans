@@ -55,6 +55,8 @@ typedef struct RowParams {
     uint32_t istep;
 } RowParams;
 
+typedef uint32_t (FnFindKOptimal)(State);
+
 typedef struct {
     LDouble mean;
     LDouble variance;
@@ -62,7 +64,7 @@ typedef struct {
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self);
 VALUE rb_ckmedian_sorted_group_sizes(VALUE self);
-VALUE rb_sorted_group_sizes(VALUE self, FnDissim*);
+VALUE rb_sorted_group_sizes(VALUE self, FnDissim*, FnFindKOptimal*);
 
 Arena *arena_create(size_t);
 void  *arena_alloc(Arena*, size_t);
@@ -100,6 +102,7 @@ SegmentStats shifted_data_variance(VectorF*, uint32_t, uint32_t);
 VectorI      *backtrack_sizes(State, VectorI*, uint32_t);
 uint32_t     find_koptimal_fast(State);
 uint32_t     find_koptimal_gmm(State);
+uint32_t     find_koptimal_lmm(State);
 
 void Init_extensions(void) {
     VALUE ckmeans_module     = rb_const_get(rb_cObject, rb_intern("Ckmeans"));
@@ -117,20 +120,23 @@ void Init_extensions(void) {
 
 VALUE rb_ckmeans_sorted_group_sizes(VALUE self)
 {
-    return rb_sorted_group_sizes(self, dissimilarity_l2);
+    bool use_gmm = RTEST(rb_iv_get(self, "@use_gmm"));
+    FnFindKOptimal *find_k = use_gmm ? find_koptimal_gmm : find_koptimal_fast;
+    return rb_sorted_group_sizes(self, dissimilarity_l2, find_k);
 }
 
 VALUE rb_ckmedian_sorted_group_sizes(VALUE self)
 {
-    return rb_sorted_group_sizes(self, dissimilarity_l1);
+    bool use_lmm = RTEST(rb_iv_get(self, "@use_lmm"));
+    FnFindKOptimal *find_k = use_lmm ? find_koptimal_lmm : find_koptimal_fast;
+    return rb_sorted_group_sizes(self, dissimilarity_l1, find_k);
 }
 
-VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
+VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria, FnFindKOptimal *find_koptimal)
 {
     uint32_t xcount  = NUM2UINT(rb_iv_get(self, "@xcount"));
     uint32_t kmin    = NUM2UINT(rb_iv_get(self, "@kmin"));
     uint32_t kmax    = NUM2UINT(rb_iv_get(self, "@kmax"));
-    bool use_gmm     = RTEST(rb_iv_get(self, "@use_gmm"));
     VALUE rb_xsorted = rb_iv_get(self, "@xsorted");
     size_t capacity  = sizeof(LDouble) * (xcount + 2) * (kmax + 2) * ALLOCATION_FACTOR + ARENA_MIN_CAPACITY;
     Arena *arena     = arena_create(capacity);
@@ -185,7 +191,7 @@ VALUE rb_sorted_group_sizes(VALUE self, FnDissim *criteria)
         fill_row(state, q, imin, xcount - 1);
     }
 
-    uint32_t koptimal = use_gmm ? find_koptimal_gmm(state) : find_koptimal_fast(state);
+    uint32_t koptimal = find_koptimal(state);
 
     VectorI *sizes = vector_create_i(arena, koptimal);
     backtrack_sizes(state, sizes, koptimal);
@@ -372,6 +378,119 @@ uint32_t find_koptimal_gmm(State state)
     return kopt;
 }
 
+uint32_t find_koptimal_lmm(State state)
+{
+    uint32_t kmin = state.kmin;
+    uint32_t kmax = state.kmax;
+    uint32_t xcount = state.xcount;
+
+    if (kmin > kmax || xcount < 2) {
+        return (kmin < kmax) ? kmin : kmax;
+    }
+
+    Arena *arena       = state.arena;
+    VectorF *xsorted   = state.xsorted;
+    uint32_t kopt      = kmin;
+    LDouble max_bic    = 0.0;
+    LDouble log_xcount = log((LDouble) xcount);
+    VectorF *lambda    = vector_create_f(arena, kmax);
+    VectorF *mu        = vector_create_f(arena, kmax);  /* median */
+    VectorF *scale     = vector_create_f(arena, kmax);  /* MAD (mean absolute deviation) */
+    VectorF *coeff     = vector_create_f(arena, kmax);
+    VectorI *sizes     = vector_create_i(arena, kmax);
+
+    for (uint32_t kouter = kmin; kouter <= kmax; ++kouter)
+    {
+        uint32_t ileft = 0;
+        uint32_t iright;
+
+        backtrack_sizes(state, sizes, kouter);
+
+        for (uint32_t k = 0; k < kouter; ++k)
+        {
+            uint32_t size = vector_get_i(sizes, k);
+            vector_set_f(lambda, k, size / (LDouble) xcount);
+            iright = ileft + size - 1;
+
+            uint32_t median_idx = (ileft + iright) / 2;
+            LDouble median;
+            if ((size % 2) == 1) {
+                median = vector_get_f(xsorted, median_idx);
+            } else {
+                median = (vector_get_f(xsorted, median_idx) + vector_get_f(xsorted, median_idx + 1)) / 2.0;
+            }
+            vector_set_f(mu, k, median);
+
+            LDouble mad = 0.0;
+            for (uint32_t i = ileft; i <= iright; ++i) {
+                LDouble xi = vector_get_f(xsorted, i);
+                mad += fabs(xi - median);
+            }
+            mad = mad / size;
+            vector_set_f(scale, k, mad);
+
+            /* Handle edge case: MAD = 0 (all points are the same) or size = 1 */
+            if (mad == 0 || size == 1) {
+                LDouble dmin;
+
+                if (ileft > 0 && iright < xcount - 1) {
+                    LDouble left_diff = vector_get_diff_f(xsorted, ileft, ileft - 1);
+                    LDouble right_diff = vector_get_diff_f(xsorted, iright + 1, iright);
+
+                    dmin = (left_diff < right_diff) ? left_diff : right_diff;
+                } else if (ileft > 0) {
+                    dmin = vector_get_diff_f(xsorted, ileft, ileft - 1);
+                } else {
+                    dmin = vector_get_diff_f(xsorted, iright + 1, iright);
+                }
+
+                if (mad == 0) vector_set_f(scale, k, dmin / 6.0);
+                if (size == 1) vector_set_f(scale, k, dmin);
+            }
+
+            /* Laplace coefficient: lambda_k / (2 * b_k) */
+            LDouble lambda_k = vector_get_f(lambda, k);
+            LDouble scale_k  = vector_get_f(scale, k);
+            vector_set_f(coeff, k, lambda_k / (2.0 * scale_k));
+            ileft = iright + 1;
+        }
+
+        LDouble loglikelihood = 0.0;
+
+        for (uint32_t i = 0; i < xcount; ++i)
+        {
+            LDouble L  = 0.0;
+            LDouble xi = vector_get_f(xsorted, i);
+
+            for (uint32_t k = 0; k < kouter; ++k)
+            {
+                LDouble coeff_k  = vector_get_f(coeff, k);
+                LDouble mu_k     = vector_get_f(mu, k);
+                LDouble scale_k  = vector_get_f(scale, k);
+                LDouble x_mu_abs = fabs(xi - mu_k);
+                /* Laplace PDF: (1/(2b)) * exp(-|x-μ|/b) */
+                L               += coeff_k * exp(-x_mu_abs / scale_k);
+            }
+            loglikelihood += log(L);
+        }
+
+        /* BIC = 2*logL - (3k-1)*log(n) */
+        /* Parameters: k-1 mixing proportions + k medians + k scales = 3k-1 */
+        LDouble bic = 2 * loglikelihood - (3 * kouter - 1) * log_xcount;
+
+        if (kouter == kmin) {
+            max_bic = bic;
+            kopt = kmin;
+        } else {
+            if (bic > max_bic) {
+                max_bic = bic;
+                kopt = kouter;
+            }
+        }
+    }
+    return kopt;
+}
+
 VectorI *backtrack_sizes(State state, VectorI *sizes, uint32_t k)
 {
     MatrixI *splits = state.splits;
@@ -379,12 +498,12 @@ VectorI *backtrack_sizes(State state, VectorI *sizes, uint32_t k)
     uint32_t right  = xcount - 1;
     uint32_t left   = 0;
 
-    // Common case works with `i` remaining unsigned and unconditional assignment of the next `left` and `right`
+    /* Common case works with `i` remaining unsigned and unconditional assignment of the next `left` and `right` */
     for (uint32_t i = k - 1; i > 0; i--, right = left - 1) {
         left = matrix_get_i(splits, i, right);
         vector_set_i(sizes, i, right - left + 1);
     }
-    // Special case outside of the loop removing the need for conditionals
+    /* Special case outside of the loop removing the need for conditionals */
     left = matrix_get_i(splits, 0, right);
     vector_set_i(sizes, 0, right - left + 1);
 
