@@ -39,8 +39,13 @@ RSpec.describe Ckmeans::Clusterer do # rubocop:disable Metrics/BlockLength
         expect(clusters).to eq([[10], [11]])
       end
 
-      specify "stable" do
+      specify "stable (using :gmm)" do
         clusters = described_class.new(x, 1, 2, :gmm).clusters
+        expect(clusters).to eq([[10, 11]])
+      end
+
+      specify "stable (using :stable alias)" do
+        clusters = described_class.new(x, 1, 2, :stable).clusters
         expect(clusters).to eq([[10, 11]])
       end
     end

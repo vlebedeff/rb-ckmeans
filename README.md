@@ -18,32 +18,51 @@ gem install ckmeans
 
 ## Usage
 
-### Fixed Cluster Count
+### Basic Clustering
 
 ```rb
-# Fixed cluster count
-Ckmeans::Clusterer(data, kmin).clusters
-Ckmedian::Clusterer(data, kmin).clusters
+# Fixed cluster count (K known in advance)
+Ckmeans::Clusterer.new(data, 3).clusters
+Ckmedian::Clusterer.new(data, 3).clusters
+
+# Automatic K selection (tries K from kmin to kmax, picks optimal)
+Ckmeans::Clusterer.new(data, 1, 10).clusters
+Ckmedian::Clusterer.new(data, 1, 10).clusters
 ```
 
-### Estimate optimal cluster count within kmin and kmax
+### Choosing Between Ckmeans and Ckmedian
+
+- **Ckmeans** - Minimizes squared distances (L2). Good for normally distributed data.
+- **Ckmedian** - Minimizes absolute distances (L1). More robust to outliers and data bursts.
 
 ```rb
-Ckmeans::Clusterer(data, kmin, kmax).clusters
-Ckmedian::Clusterer(data, kmin, kmax).clusters
+# For clean numerical data
+temperatures = [20.1, 20.2, 25.5, 25.6, 30.1, 30.2]
+Ckmeans::Clusterer.new(temperatures, 1, 5).clusters
+# => [[20.1, 20.2], [25.5, 25.6], [30.1, 30.2]]
+
+# For data with outliers (e.g., photo timestamps with bursts)
+timestamps = photos.map(&:taken_at).map(&:to_i)
+Ckmedian::Clusterer.new(timestamps, 1, 20).clusters
 ```
 
-### Fast & Stable Estimation of K
+### Stable Estimation (Recommended for Edge Cases)
 
-For big collections without many duplicates, use regular estimation.
-For relatively small sets or sets with many duplicates use Gaussian Mixture Model (GMM)-based estimation.
-It works slower but is more resilient for various data patterns like big numbers of duplicates or clusters with different
-numbers of elements.
+By default, both algorithms use a fast heuristic for estimating K. For datasets with many duplicates, tight clusters, or outliers, use `:stable` for more robust estimation:
 
 ```rb
-Ckmeans::Clusterer(data, kmin, kmax, :gmm).clusters
-Ckmedian::Clusterer(data, kmin, kmax, :gmm).clusters
+# Stable estimation (uses statistical mixture models)
+Ckmeans::Clusterer.new(data, 1, 10, :stable).clusters
+Ckmedian::Clusterer.new(data, 1, 10, :stable).clusters
 ```
+
+**When to use `:stable`:**
+- Small to medium datasets (< 1000 points)
+- Many duplicate values
+- Clusters with very different sizes
+- Photo/event timeline clustering (bursts and gaps)
+
+**Expert users:** `:stable` is an alias for `:gmm` (Gaussian Mixture Model) in Ckmeans and `:lmm` (Laplace Mixture Model) in Ckmedian.
 
 ## License
 
