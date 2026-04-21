@@ -92,7 +92,7 @@ GEM
     yard (0.9.43)
 
 PLATFORMS
-  arm64-darwin-24
+  arm64-darwin
   ruby
 
 DEPENDENCIES
